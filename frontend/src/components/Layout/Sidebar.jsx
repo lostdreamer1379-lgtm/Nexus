@@ -15,6 +15,7 @@ import {
   Trash2,
   Activity,
   BrainCircuit,
+  MoreVertical,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { api } from "../../api/client";
@@ -27,6 +28,8 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
   const [query, setQuery] = useState("");
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
+  const [openActionsId, setOpenActionsId] = useState(null);
+  const [savingMemoryId, setSavingMemoryId] = useState(null);
 
   const loadConversations = async () => {
     try {
@@ -75,6 +78,17 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
     if (!title) return;
     await api.patch(`/api/v1/conversations/${id}`, { title });
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
+  };
+
+  const saveConversationToMemory = async (e, id) => {
+    e.stopPropagation();
+    setSavingMemoryId(id);
+    try {
+      await api.post(`/api/v1/memories/conversations/${id}`);
+      setOpenActionsId(null);
+    } finally {
+      setSavingMemoryId(null);
+    }
   };
 
   return (
@@ -191,6 +205,45 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
             border-radius: 4px;
           }
           .sb-convo-actions button:hover { color: var(--text-primary); background: var(--bg-3); }
+          .sb-convo-more {
+            display: none;
+            flex-shrink: 0;
+            background: transparent;
+            border: none;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 5px;
+          }
+          .sb-convo-more:hover, .sb-convo-more.active { color: var(--text-primary); background: var(--bg-3); }
+          .sb-convo-menu {
+            position: absolute;
+            z-index: 20;
+            right: 6px;
+            top: calc(100% - 2px);
+            min-width: 168px;
+            padding: 5px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-2);
+            box-shadow: 0 12px 30px rgba(0,0,0,.28);
+          }
+          .sb-convo-menu button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 0;
+            border-radius: 6px;
+            padding: 8px 9px;
+            color: var(--text-secondary);
+            background: transparent;
+            cursor: pointer;
+            text-align: left;
+            font-size: 12px;
+          }
+          .sb-convo-menu button:hover { color: var(--text-primary); background: var(--bg-3); }
+          .sb-convo-menu button.danger:hover { color: var(--danger); }
           .sb-rename-input {
             flex: 1;
             background: var(--bg-3);
@@ -236,6 +289,8 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
               z-index: 999;
             }
             .sb-close { display: inline-flex; }
+            .sb-convo-more { display: inline-flex; }
+            .sb-convo-actions { display: none !important; }
           }
         `}</style>
 
@@ -314,7 +369,21 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
               ) : (
                 <span className="sb-convo-title">{c.title}</span>
               )}
+              <button
+                className={`sb-convo-more ${openActionsId === c.id ? "active" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenActionsId((current) => current === c.id ? null : c.id);
+                }}
+                aria-label={`${openActionsId === c.id ? "Close" : "Open"} actions for ${c.title}`}
+                aria-expanded={openActionsId === c.id}
+              >
+                <MoreVertical size={16} />
+              </button>
               <div className="sb-convo-actions">
+                <button onClick={(e) => saveConversationToMemory(e, c.id)} disabled={savingMemoryId === c.id} aria-label="Add chat to memory">
+                  <BrainCircuit size={13} />
+                </button>
                 <button onClick={(e) => beginRename(e, c)} aria-label="Rename">
                   <Pencil size={13} />
                 </button>
@@ -322,6 +391,19 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
                   <Trash2 size={13} />
                 </button>
               </div>
+              {openActionsId === c.id && (
+                <div className="sb-convo-menu" onClick={(e) => e.stopPropagation()}>
+                  <button onClick={(e) => saveConversationToMemory(e, c.id)} disabled={savingMemoryId === c.id}>
+                    <BrainCircuit size={14} /> {savingMemoryId === c.id ? "Saving…" : "Add to memory"}
+                  </button>
+                  <button onClick={(e) => beginRename(e, c)}>
+                    <Pencil size={14} /> Edit name
+                  </button>
+                  <button className="danger" onClick={(e) => deleteConversation(e, c.id)}>
+                    <Trash2 size={14} /> Delete chat
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

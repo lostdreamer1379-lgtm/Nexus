@@ -149,6 +149,58 @@ async def suggest_memories(
     return suggestions
 
 
+@router.post("/conversations/{conversation_id}")
+def save_conversation_to_memory(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    conversation = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    messages = (
+        db.query(Message)
+        .filter(Message.conversation_id == conversation.id, Message.content.isnot(None))
+        .order_by(Message.created_at.asc())
+        .all()
+    )
+    created = 0
+    now = datetime.now(timezone.utc)
+    for message in messages:
+        content = message.content.strip()
+        if not content:
+            continue
+        content = content[:1000]
+        duplicate = (
+            db.query(UserMemory)
+            .filter(UserMemory.user_id == current_user.id, UserMemory.content.ilike(content))
+            .first()
+        )
+        if duplicate:
+            duplicate.status = "approved"
+            duplicate.last_confirmed_at = now
+            continue
+        db.add(
+            UserMemory(
+                user_id=current_user.id,
+                content=content,
+                category="fact",
+                confidence=0.8,
+                status="approved",
+                source_conversation_id=conversation.id,
+                last_confirmed_at=now,
+            )
+        )
+        created += 1
+    db.commit()
+    return {"saved": created, "messages": len(messages)}
+
+
 @router.post("/refine")
 async def refine_memories(
     payload: RefineRequest,
