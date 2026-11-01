@@ -42,12 +42,20 @@ export default function MemoriesPanel() {
   return (
     <div className="page">
       <style>{`
-        .memory-page { max-width: 760px; margin: 0 auto; }
-        .memory-card { display:flex; gap:12px; align-items:flex-start; padding:14px 0; border-top:1px solid var(--border-subtle); }
-        .memory-content { flex:1; min-width:0; color:var(--text-primary); line-height:1.45; }
+        .memory-page { width:100%; max-width:760px; margin:0 auto; box-sizing:border-box; }
+        .memory-card { display:flex; gap:12px; align-items:flex-start; padding:14px 0; border-top:1px solid var(--border-subtle); box-sizing:border-box; }
+        .memory-content { flex:1; min-width:0; color:var(--text-primary); line-height:1.45; overflow-wrap:anywhere; }
         .memory-meta { color:var(--text-tertiary); font-size:12px; margin-top:5px; }
         .memory-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
         .memory-edit { flex:1; min-width:180px; }
+        @media (max-width:600px) {
+          .memory-page .page-header { flex-direction:column; align-items:stretch; }
+          .memory-page .page-header > button { width:100%; justify-content:center; }
+          .memory-card { flex-direction:column; gap:10px; }
+          .memory-actions { width:100%; justify-content:flex-start; }
+          .memory-actions .btn { flex:1; justify-content:center; }
+          .memory-edit { width:100%; min-width:0; }
+        }
       `}</style>
       <div className="memory-page">
         <div className="page-header" style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
