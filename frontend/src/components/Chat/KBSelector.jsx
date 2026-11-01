@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Database, ChevronDown, Check, X } from "lucide-react";
+import { createPortal } from "react-dom";
 
 export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
   const [open, setOpen] = useState(false);
@@ -65,7 +66,7 @@ export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
         <ChevronDown size={13} />
       </button>
 
-      {open && (
+      {open && createPortal(
         <div className="kb-menu">
           {/* "None" option to deactivate RAG */}
           <div
@@ -97,7 +98,8 @@ export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
               {kb.id === selectedKbId && <Check size={14} color="var(--accent)" />}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

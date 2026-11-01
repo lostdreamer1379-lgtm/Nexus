@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Check, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
+import { createPortal } from "react-dom";
 
 export default function ModelSelector({ models, selectedModelId, onSelect }) {
   const [open, setOpen] = useState(false);
@@ -61,7 +62,7 @@ export default function ModelSelector({ models, selectedModelId, onSelect }) {
         <ChevronDown size={15} />
       </button>
 
-      {open && (
+      {open && createPortal(
         <div className="ms-menu">
           {models.map((m) => (
             <div
@@ -81,7 +82,8 @@ export default function ModelSelector({ models, selectedModelId, onSelect }) {
               {m.id === selectedModelId && <Check size={15} color="var(--accent)" />}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
