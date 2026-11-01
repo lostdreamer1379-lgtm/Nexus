@@ -32,6 +32,33 @@ function copyableResponse(text) {
   return output.join("\n");
 }
 
+function repairMarkdownTables(text) {
+  if (!text || !text.includes("|")) return text;
+
+  let repaired = text.replace(/\r\n/g, "\n");
+  // Some models collapse the header, separator, and first row into one line.
+  repaired = repaired.replace(
+    /\s+\|\s*\|\s*((?::?-{3,}:?\s*\|)+)\s*/g,
+    "\n|$1\n"
+  );
+
+  const lines = repaired.split("\n");
+  const output = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const current = lines[index];
+    const next = lines[index + 1] || "";
+    if (current.includes("|") && /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(next)) {
+      const columns = current.replace(/^\|/, "").replace(/\|$/, "").split("|").length;
+      const separator = `|${Array.from({ length: columns }, () => "---").join("|")}|`;
+      output.push(current, separator);
+      index += 1;
+      continue;
+    }
+    output.push(current);
+  }
+  return output.join("\n");
+}
+
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -228,7 +255,7 @@ export default function MessageList({ messages, streaming, onRegenerate }) {
                   table: ({ children }) => <div className="table-scroll"><table>{children}</table></div>,
                 }}
               >
-                {m.content}
+                {repairMarkdownTables(m.content)}
               </ReactMarkdown>
             )}
           </div>

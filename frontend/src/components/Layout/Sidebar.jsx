@@ -219,18 +219,20 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
             .sidebar {
               position: fixed;
               inset: 0 auto 0 0;
-              z-index: 200;
+              height: 100dvh;
+              max-height: 100dvh;
+              z-index: 1000;
               transform: translateX(-100%);
               transition: transform 0.18s ease;
               box-shadow: 0 0 0 rgba(0,0,0,0);
             }
-            .sidebar-open { transform: translateX(0); box-shadow: 20px 0 40px rgba(0,0,0,0.3); }
+            .sidebar-open { transform: translateX(0); box-shadow: 20px 0 40px rgba(0,0,0,0.3); overflow-y: auto; }
             .sidebar-backdrop {
               display: block;
               position: fixed;
               inset: 0;
               background: rgba(0,0,0,0.5);
-              z-index: 199;
+              z-index: 999;
             }
             .sb-close { display: inline-flex; }
           }

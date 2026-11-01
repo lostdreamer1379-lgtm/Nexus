@@ -232,6 +232,9 @@ export default function ChatView({ onConversationChange }) {
           display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
           padding: var(--space-3) var(--space-5);
           border-bottom: 1px solid var(--border-subtle);
+          position: sticky; top: 0; z-index: 80;
+          background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+          backdrop-filter: blur(14px);
         }
         .chat-header-divider {
           width: 1px; height: 20px; background: var(--border);
@@ -251,6 +254,16 @@ export default function ChatView({ onConversationChange }) {
           border-color: var(--accent); color: var(--accent); background: var(--accent-dim);
         }
         .chat-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+        @media (max-width: 860px) {
+          .chat-header {
+            flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+            padding: 8px 12px; touch-action: pan-x;
+          }
+          .chat-header::-webkit-scrollbar { display: none; }
+          .chat-header-divider { height: 24px; }
+          .token-counter { margin-left: 0; flex-shrink: 0; }
+          .web-toggle { flex-shrink: 0; min-height: 36px; }
+        }
         .chat-welcome {
           height: 100%; display: flex; flex-direction: column; align-items: center;
           justify-content: center; text-align: center; padding: var(--space-5);

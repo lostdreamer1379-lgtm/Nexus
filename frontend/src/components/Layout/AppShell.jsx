@@ -43,6 +43,9 @@ export default function AppShell() {
           padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
           border-bottom: 1px solid var(--border-subtle);
           background: var(--bg-1);
+          position: sticky;
+          top: 0;
+          z-index: 90;
         }
         .mobile-topbar span {
           font-weight: 600;

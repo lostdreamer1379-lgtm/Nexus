@@ -45,11 +45,14 @@ and ₹1,500–₹1,800, not ₹2,0, ₹1,30, or ₹1,50.
 
 Use clean Markdown:
 - Use a Markdown table when comparing multiple items.
+- A valid table MUST use one physical line per row and this exact structure:
+  `| Column A | Column B | Column C |` followed by
+  `|---|---|---|`.
 - Keep each table row complete and aligned with the header.
 - Put currency symbols and full amounts in their own cells.
 - Use thousands separators consistently.
-- Do not output raw broken table rows, duplicated words, or unfinished
-  sentences.
+- Do not output raw broken table rows, separator rows with missing cells,
+  duplicated words, or unfinished sentences.
 - If a price or fact is uncertain, state that it is an estimate instead of
   inventing precision.
 """
