@@ -154,6 +154,18 @@ class OpenAICompatibleAdapter(ProviderAdapter):
                             detail = None
                         err = self._map_http_error(resp)
                         detail = detail or self._response_detail(resp)
+                        if (
+                            self.provider_label == "NVIDIA NIM"
+                            and resp.status_code == 404
+                            and detail
+                            and "function" in detail.lower()
+                            and "not found for account" in detail.lower()
+                        ):
+                            detail = (
+                                "NVIDIA denied access to this model for the current account. "
+                                "Enable Public API Endpoints or request access to the model in the "
+                                "NVIDIA Developer portal, then refresh the provider connection."
+                            )
                         if resp.status_code == 404:
                             detail = (
                                 detail
