@@ -7,7 +7,7 @@ const COMMON_EMBEDDING_MODELS = [
   { id: "text-embedding-3-large", label: "OpenAI text-embedding-3-large", providers: ["openai"] },
   { id: "text-embedding-ada-002", label: "OpenAI text-embedding-ada-002 (legacy)", providers: ["openai"] },
   { id: "nvidia/nv-embedqa-e5-v5", label: "NVIDIA NV-EmbedQA-E5-v5", providers: ["nvidia"] },
-  { id: "text-embedding-004", label: "Google text-embedding-004", providers: ["gemini"] },
+  { id: "gemini-embedding-001", label: "Google gemini-embedding-001", providers: ["gemini"] },
   { id: "custom", label: "Enter a custom model ID", providers: ["openrouter", "openai", "nvidia", "gemini", "anthropic", "custom"] },
 ];
 

@@ -84,6 +84,11 @@ async def embed_texts(
                         f"The {provider_type} embedding model '{model_id}' or embedding endpoint "
                         "was not found. Check the provider connection and embedding model ID."
                     )
+                elif resp.status_code == 410:
+                    detail = detail or (
+                        f"The {provider_type} embedding model '{model_id}' or endpoint is no longer available. "
+                        "Select a current embedding model and retry the upload."
+                    )
                 raise EmbeddingError(
                     f"Embedding API returned HTTP {resp.status_code}"
                     + (f": {detail}" if detail else "")

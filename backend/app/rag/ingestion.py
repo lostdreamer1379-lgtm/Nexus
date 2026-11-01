@@ -120,5 +120,6 @@ def _default_base_url(provider_type: str) -> str:
         "openai": "https://api.openai.com/v1",
         "openrouter": "https://openrouter.ai/api/v1",
         "nvidia": "https://integrate.api.nvidia.com/v1",
+        "gemini": "https://generativelanguage.googleapis.com/v1beta",
     }
     return defaults.get(provider_type, "https://api.openai.com/v1")
