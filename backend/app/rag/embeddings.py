@@ -24,6 +24,7 @@ import numpy as np
 from app.providers.openai_compatible import REQUEST_TIMEOUT
 
 BATCH_SIZE = 256  # OpenAI and most compatible providers allow up to 2048; 256 is a safe default
+GEMINI_BATCH_SIZE = 100
 
 
 class EmbeddingError(Exception):
@@ -35,6 +36,7 @@ async def embed_texts(
     api_key: str,
     base_url: str,
     model_id: str,
+    provider_type: str = "openai",
 ) -> list[np.ndarray]:
     """
     Return one float32 unit-norm embedding per input text.
@@ -43,34 +45,59 @@ async def embed_texts(
     if not texts:
         return []
 
-    url = base_url.rstrip("/") + "/embeddings"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
     all_embeddings: list[np.ndarray] = []
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-        for i in range(0, len(texts), BATCH_SIZE):
-            batch = texts[i : i + BATCH_SIZE]
-            payload = {"model": model_id, "input": batch}
+        batch_size = GEMINI_BATCH_SIZE if provider_type == "gemini" else BATCH_SIZE
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
             try:
-                resp = await client.post(url, headers=headers, json=payload)
+                if provider_type == "gemini":
+                    gemini_model = "gemini-embedding-001" if model_id.startswith("text-embedding-") else model_id
+                    url = f"{base_url.rstrip('/')}/models/{gemini_model}:batchEmbedContents?key={api_key}"
+                    payload = {
+                        "requests": [
+                            {
+                                "model": f"models/{gemini_model}",
+                                "content": {"parts": [{"text": text}]},
+                            }
+                            for text in batch
+                        ]
+                    }
+                    resp = await client.post(url, json=payload)
+                else:
+                    url = base_url.rstrip("/") + "/embeddings"
+                    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+                    payload = {"model": model_id, "input": batch}
+                    resp = await client.post(url, headers=headers, json=payload)
             except httpx.RequestError as exc:
                 raise EmbeddingError(f"Could not reach embedding endpoint: {exc}") from exc
 
             if resp.status_code != 200:
                 try:
-                    detail = resp.json().get("error", {}).get("message", "")
+                    body = resp.json()
+                    detail = body.get("error", {}).get("message", "") if isinstance(body, dict) else ""
                 except Exception:
                     detail = ""
+                if resp.status_code == 404:
+                    detail = detail or (
+                        f"The {provider_type} embedding model '{model_id}' or embedding endpoint "
+                        "was not found. Check the provider connection and embedding model ID."
+                    )
                 raise EmbeddingError(
                     f"Embedding API returned HTTP {resp.status_code}"
                     + (f": {detail}" if detail else "")
                 )
 
-            data = resp.json().get("data", [])
-            data.sort(key=lambda x: x["index"])
-            for item in data:
-                vec = np.array(item["embedding"], dtype=np.float32)
+            body = resp.json()
+            if provider_type == "gemini":
+                embeddings = [item.get("values", []) for item in body.get("embeddings", [])]
+            else:
+                data = body.get("data", [])
+                data.sort(key=lambda x: x["index"])
+                embeddings = [item.get("embedding", []) for item in data]
+            for embedding in embeddings:
+                vec = np.array(embedding, dtype=np.float32)
                 all_embeddings.append(_normalize(vec))
 
     return all_embeddings

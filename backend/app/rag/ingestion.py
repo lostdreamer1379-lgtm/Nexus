@@ -65,7 +65,13 @@ async def ingest_document(document_id: str, db: Session) -> None:
         base_url = conn.base_url or _default_base_url(conn.provider_type)
 
         texts = [c.content for c in chunks]
-        vectors = await embed_texts(texts, api_key=api_key, base_url=base_url, model_id=kb.embedding_model_id)
+        vectors = await embed_texts(
+            texts,
+            api_key=api_key,
+            base_url=base_url,
+            model_id=kb.embedding_model_id,
+            provider_type=conn.provider_type,
+        )
 
         if len(vectors) != len(chunks):
             raise ValueError(f"Embedding count mismatch: {len(vectors)} vectors for {len(chunks)} chunks.")

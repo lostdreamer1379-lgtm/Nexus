@@ -76,7 +76,11 @@ async def retrieve(query: str, kb_id: str, user_id: str, db: Session) -> Retriev
     base_url = conn.base_url or _default_base_url(conn.provider_type)
 
     query_vecs = await embed_texts(
-        [query], api_key=api_key, base_url=base_url, model_id=kb.embedding_model_id
+        [query],
+        api_key=api_key,
+        base_url=base_url,
+        model_id=kb.embedding_model_id,
+        provider_type=conn.provider_type,
     )
     if not query_vecs:
         return None
