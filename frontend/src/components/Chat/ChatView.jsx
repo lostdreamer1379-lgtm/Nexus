@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import { api, streamChatCompletion, ApiError } from "../../api/client";
-import ModelSelector from "./ModelSelector.jsx";
 import KBSelector from "./KBSelector.jsx";
 import MessageList from "./MessageList.jsx";
 import Composer from "./Composer.jsx";
@@ -243,7 +242,7 @@ export default function ChatView({ onConversationChange }) {
         .chat-view { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
         .chat-header {
           display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
-          padding: var(--space-3) var(--space-5);
+          padding: 10px var(--space-5);
           border-bottom: 1px solid var(--border-subtle);
           position: sticky; top: 0; z-index: 80; flex-shrink: 0;
           background: color-mix(in srgb, var(--bg-1) 94%, transparent);
@@ -271,11 +270,11 @@ export default function ChatView({ onConversationChange }) {
         @media (max-width: 860px) {
           .chat-header {
             flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
-            padding: 8px 12px; touch-action: pan-x;
+            padding: 8px 12px; touch-action: pan-x; min-height:44px;
             position: relative; z-index: 120;
           }
           .chat-header::-webkit-scrollbar { display: none; }
-          .chat-header-divider { height: 24px; }
+          .chat-header-divider { height: 20px; }
           .token-counter { margin-left: 0; flex-shrink: 0; }
           .web-toggle { flex-shrink: 0; min-height: 36px; }
         }
@@ -294,7 +293,6 @@ export default function ChatView({ onConversationChange }) {
       `}</style>
 
       <div className="chat-header">
-        <ModelSelector models={models} selectedModelId={selectedModelId} onSelect={setSelectedModelId} />
         {knowledgeBases.length > 0 && (
           <>
             <div className="chat-header-divider" />
@@ -305,24 +303,6 @@ export default function ChatView({ onConversationChange }) {
             />
           </>
         )}
-        <button
-          type="button"
-          className={`web-toggle ${webSearch ? "active" : ""}`}
-          onClick={toggleWebSearch}
-          aria-pressed={webSearch}
-          title="Search the live web and use the results as context"
-        >
-          Web
-        </button>
-        <button
-          type="button"
-          className={`web-toggle ${agentWorkflow ? "active" : ""}`}
-          onClick={toggleAgentWorkflow}
-          aria-pressed={agentWorkflow}
-          title="Plan and execute this request in multiple bounded steps"
-        >
-          Agent
-        </button>
         <div className="token-counter" title="Estimated from message text; actual provider tokenization may differ">
           {remainingTokens === null
             ? `~${formatTokenCount(usedTokens)} tokens used`
@@ -411,7 +391,19 @@ export default function ChatView({ onConversationChange }) {
         </div>
       )}
 
-      <Composer onSend={sendMessage} onStop={stopStreaming} streaming={streaming} disabled={!selectedModelId} />
+      <Composer
+        onSend={sendMessage}
+        onStop={stopStreaming}
+        streaming={streaming}
+        disabled={!selectedModelId}
+        models={models}
+        selectedModelId={selectedModelId}
+        onSelectModel={setSelectedModelId}
+        webSearch={webSearch}
+        agentWorkflow={agentWorkflow}
+        onToggleWeb={toggleWebSearch}
+        onToggleAgent={toggleAgentWorkflow}
+      />
     </div>
   );
 }

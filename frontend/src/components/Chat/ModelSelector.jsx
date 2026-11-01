@@ -43,8 +43,8 @@ export default function ModelSelector({ models, selectedModelId, onSelect }) {
         }
         @media (max-width: 860px) {
           .ms-menu {
-            position: fixed; top: 104px; left: 12px; right: 12px; width: auto;
-            max-height: min(360px, calc(100dvh - 120px)); z-index: 300;
+            position: fixed; top: auto; bottom: 104px; left: 12px; right: 12px; width: auto;
+            max-height: min(360px, calc(100dvh - 140px)); z-index: 300;
           }
         }
         .ms-item {
