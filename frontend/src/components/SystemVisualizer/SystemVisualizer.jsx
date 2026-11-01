@@ -32,9 +32,16 @@ export default function SystemVisualizer() {
   const [events, setEvents] = useState([]);
   const [now, setNow] = useState(Date.now());
   const pendingEvents = useRef([]);
-  const frameRef = useRef(null);
+  const flushRef = useRef(null);
 
   useEffect(() => {
+    const flush = () => {
+      flushRef.current = null;
+      const nextEvents = pendingEvents.current.splice(0);
+      if (nextEvents.length) {
+        setEvents((current) => [...current, ...nextEvents].slice(-60));
+      }
+    };
     const unsubscribe = subscribeSystemEvents((event) => {
       if (event.type === "reset") {
         pendingEvents.current = [];
@@ -42,18 +49,11 @@ export default function SystemVisualizer() {
         return;
       }
       pendingEvents.current.push(event);
-      if (frameRef.current !== null) return;
-      frameRef.current = requestAnimationFrame(() => {
-        const nextEvents = pendingEvents.current.splice(0);
-        frameRef.current = null;
-        if (nextEvents.length) {
-          setEvents((current) => [...current, ...nextEvents].slice(-60));
-        }
-      });
+      if (flushRef.current === null) flushRef.current = window.setTimeout(flush, 80);
     });
     return () => {
       unsubscribe();
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      if (flushRef.current !== null) window.clearTimeout(flushRef.current);
     };
   }, []);
 
@@ -85,10 +85,10 @@ export default function SystemVisualizer() {
   }, [events, now]);
 
   const latest = events.slice(-1)[0];
-  const counts = events.reduce((result, event) => {
+  const counts = useMemo(() => events.reduce((result, event) => {
     result[event.kind || "system"] = (result[event.kind || "system"] || 0) + 1;
     return result;
-  }, {});
+  }, {}), [events]);
 
   return (
     <div className="visualizer-page">

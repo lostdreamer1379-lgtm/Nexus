@@ -1,23 +1,29 @@
-# Nexus AI
+# Nexus AI — Grounded Multi-Provider AI Workspace
 
-Nexus AI is a self-hosted, multi-user AI workspace. It provides one interface
-for multiple AI providers, model discovery, streaming conversations, retrieval
-augmented generation (RAG), live web context, bounded agent workflows,
-document comparison, knowledge graphs, memory refinement, and real-time system
-telemetry.
+**Nexus AI** is a self-hosted, multi-user AI workspace for connecting models,
+grounding answers in documents and live web sources, and inspecting how a
+response moves through the system. The name describes its role as a nexus:
+one controlled workspace connecting providers, models, memory, knowledge, web
+retrieval, workflows, and response delivery.
+
+It is best described as a **grounded AI orchestration workspace**, not a
+general-purpose autonomous agent. It combines provider choice, persistent
+chat, retrieval-augmented generation (RAG), bounded workflows, document
+analysis, knowledge extraction, reviewed memory, and browser-local telemetry
+in one interface.
 
 The application follows a bring-your-own-key model: each user supplies their
 own provider credentials through the UI. Provider credentials are encrypted at
 rest, scoped to the owning user, and decrypted only when a request is sent.
 
-This document describes the current implementation, not just the intended
-roadmap.
+This document describes the current implementation, including its boundaries;
+it is not a promise of future functionality.
 
 ---
 
 ## Contents
 
-1. [Product capabilities](#product-capabilities)
+1. [Capabilities and scope](#capabilities-and-scope)
 2. [Architecture overview](#architecture-overview)
 3. [Repository layout](#repository-layout)
 4. [Backend architecture](#backend-architecture)
@@ -43,7 +49,47 @@ roadmap.
 
 ---
 
-## Product capabilities
+## Capabilities and scope
+
+### What Nexus AI can do
+
+- Connect multiple providers using user-owned API keys.
+- Discover or manually register provider models.
+- Stream persistent conversations with Markdown, tables, regeneration, and
+  provider error reporting.
+- Ground responses in uploaded documents, OCR text, retrieved web pages, and
+  approved user memories.
+- Compare documents and produce structured reports.
+- Extract knowledge-graph nodes, relationships, and reviewable facts.
+- Run bounded plan/execute/synthesize workflows with a maximum of three steps.
+- Refine durable user preferences into memories that require approval before
+  they affect future chats.
+- Show local, animated telemetry for routing, retrieval, model streaming,
+  uploads, graphs, and memory operations.
+- Manage the account through Settings: log out, clear local cache, clear
+  conversations, clear memories, and permanently delete the account.
+
+### What Nexus AI cannot do
+
+- It cannot guarantee that an external provider is available, fast, accurate,
+  or willing to serve a selected model.
+- It cannot run arbitrary code, take unrestricted autonomous actions, or
+  operate as an unlimited agent.
+- It cannot guarantee that model-generated facts, prices, citations, graph
+  edges, or memories are correct; users must review important results.
+- It cannot make web search authoritative: web retrieval uses accessible
+  sources and may be incomplete, stale, blocked, or rate-limited.
+- It cannot preserve uploaded files on free Render disk after restarts or
+  redeploys; durable object storage is required for production RAG.
+- It cannot continue a response reliably after the browser, backend process,
+  or network request is terminated; the current background behavior is not a
+  durable job queue.
+- It cannot show server-wide telemetry: the System Visualizer is local to the
+  current browser tab.
+- It cannot make provider credentials recoverable if `ENCRYPTION_KEY` is lost
+  or changed; previously encrypted credentials then require re-entry.
+- It cannot make changing `SECRET_KEY` transparent; doing so invalidates
+  existing sessions.
 
 ### Provider management
 
@@ -123,6 +169,19 @@ Input → Router → Memory / Knowledge / Web → Model → Response
 
 It also shows a live event list and counters for chat, retrieval, model, web,
 upload, graph, and memory activity.
+
+### Account and data controls
+
+Settings provides:
+
+- Session logout
+- Local browser cache clearing
+- Deletion of all conversations
+- Deletion of all approved, pending, and archived user memories
+- Permanent account deletion, including owned providers, models, knowledge
+  bases, preferences, conversations, and memories
+
+Destructive server-side actions require confirmation in the interface.
 
 ---
 

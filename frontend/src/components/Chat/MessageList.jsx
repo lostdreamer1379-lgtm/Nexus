@@ -104,10 +104,23 @@ function WebSources({ sources }) {
 
 export default function MessageList({ messages, streaming, onRegenerate }) {
   const bottomRef = useRef(null);
+  const previousMessageCount = useRef(messages.length);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+    const container = bottomRef.current?.parentElement?.parentElement;
+    if (!container) return;
+
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const messageWasAdded = messages.length > previousMessageCount.current;
+    const keyboardIsOpen = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
+    previousMessageCount.current = messages.length;
+
+    // Streaming updates arrive frequently. Only follow the response when the
+    // user is already at the bottom, and never steal the mobile keyboard focus.
+    if (distanceFromBottom <= 120 && (!keyboardIsOpen || messageWasAdded)) {
+      bottomRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
+    }
+  }, [messages, streaming]);
 
   const lastAssistantIndex = [...messages].map((m) => m.role).lastIndexOf("assistant");
 

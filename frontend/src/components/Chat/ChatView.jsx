@@ -250,7 +250,7 @@ export default function ChatView({ onConversationChange }) {
         .web-toggle:hover, .web-toggle.active {
           border-color: var(--accent); color: var(--accent); background: var(--accent-dim);
         }
-        .chat-body { flex: 1; min-height: 0; overflow-y: auto; }
+        .chat-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
         .chat-welcome {
           height: 100%; display: flex; flex-direction: column; align-items: center;
           justify-content: center; text-align: center; padding: var(--space-5);
