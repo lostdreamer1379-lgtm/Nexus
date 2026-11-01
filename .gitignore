@@ -1,0 +1,63 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Local databases and database artifacts
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+
+# User-uploaded and generated application data
+rag_uploads/
+backend/rag_uploads/
+uploads/
+tmp/
+temp/
+
+# Node and frontend build output
+node_modules/
+dist/
+frontend/dist/
+.vite/
+*.tsbuildinfo
+
+# Test and coverage output
+test-results/
+coverage/
+
+# Logs
+*.log
+logs/
+
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local deployment overrides
+docker-compose.override.yml

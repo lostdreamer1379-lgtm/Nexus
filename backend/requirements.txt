@@ -1,0 +1,26 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-jose[cryptography]==3.3.0
+passlib[argon2]==1.7.4
+argon2-cffi==23.1.0
+cryptography==44.0.0
+httpx==0.28.1
+python-multipart==0.0.20
+alembic==1.14.0
+python-dotenv==1.0.1
+email-validator==2.2.0
+# Production database driver (SQLite is used by default in dev; switch
+# DATABASE_URL to postgresql+psycopg2://... in production and keep this installed)
+psycopg2-binary==2.9.10
+
+# RAG dependencies
+numpy==2.1.3            # vector operations for embedding similarity search
+pypdf==5.1.0            # PDF text extraction (pure Python, no poppler needed)
+python-docx==1.1.2      # DOCX text extraction
+Pillow==11.1.0                # Image loading for local OCR
+pytesseract==0.3.13           # Local OCR bridge; requires Tesseract installed on the host
+PyMuPDF==1.25.1               # Render scanned PDF pages for OCR
+pytest-asyncio==0.24.0  # async test support (for ingestion pipeline tests)
