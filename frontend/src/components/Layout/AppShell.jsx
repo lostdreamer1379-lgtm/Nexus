@@ -8,6 +8,7 @@ import SettingsPanel from "../Settings/SettingsPanel.jsx";
 import KnowledgeBaseManager from "../RAG/KnowledgeBaseManager.jsx";
 import { Menu } from "lucide-react";
 import SystemVisualizer from "../SystemVisualizer/SystemVisualizer.jsx";
+import MemoriesPanel from "../Memories/MemoriesPanel.jsx";
 import { api } from "../../api/client";
 import { applyTheme } from "../../utils/theme.js";
 
@@ -115,6 +116,7 @@ export default function AppShell() {
           <Route path="/models" element={<ModelLibrary />} />
           <Route path="/knowledge-bases" element={<KnowledgeBaseManager />} />
           <Route path="/settings" element={<SettingsPanel />} />
+          <Route path="/memories" element={<MemoriesPanel />} />
           <Route path="/visualizer" element={<SystemVisualizer />} />
         </Routes>
       </div>

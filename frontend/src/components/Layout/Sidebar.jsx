@@ -14,6 +14,7 @@ import {
   Pencil,
   Trash2,
   Activity,
+  BrainCircuit,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { api } from "../../api/client";
@@ -264,6 +265,9 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
           </NavLink>
           <NavLink to="/settings" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile}>
             <Settings size={16} /> Settings
+          </NavLink>
+          <NavLink to="/memories" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile}>
+            <BrainCircuit size={16} /> Memories
           </NavLink>
           <NavLink to="/visualizer" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile}>
             <Activity size={16} /> System Visualizer

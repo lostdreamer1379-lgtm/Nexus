@@ -29,6 +29,8 @@ export default function ChatView({ onConversationChange }) {
   const [loadingConvo, setLoadingConvo] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [streamError, setStreamError] = useState(null);
+  const [memorySuggestions, setMemorySuggestions] = useState([]);
+  const [savingMemory, setSavingMemory] = useState(null);
   const [backgroundProcessing, setBackgroundProcessing] = useState(false);
   const abortRef = useRef(null);
   const selectedModel = models.find((m) => m.id === selectedModelId);
@@ -38,12 +40,6 @@ export default function ChatView({ onConversationChange }) {
 
   const toggleWebSearch = () => setWebSearch((value) => !value);
   const toggleAgentWorkflow = () => setAgentWorkflow((value) => !value);
-  const toggleOnKeyDown = (toggle) => (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      toggle();
-    }
-  };
 
   // Load enabled models once
   useEffect(() => {
@@ -109,7 +105,9 @@ export default function ChatView({ onConversationChange }) {
   const sendMessage = async (text) => {
     if (!selectedModelId) return;
     setStreamError(null);
-    emitSystemEvent({ kind: "chat", node: "input", title: "Question received", detail: text.slice(0, 90), status: "running" });
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const emitTelemetry = (event) => emitSystemEvent({ ...event, runId });
+    emitTelemetry({ kind: "chat", node: "input", title: "Question received", detail: text.slice(0, 90), status: "running" });
 
     const userMsg = {
       id: `local-user-${Date.now()}`,
@@ -151,9 +149,9 @@ export default function ChatView({ onConversationChange }) {
         },
         (event) => {
           if (event.type === "start") {
-            emitSystemEvent({ kind: "system", node: "router", title: "Request routed", detail: event.model_display_name || "Selecting model", status: "running" });
-            if (event.rag_chunks?.length) emitSystemEvent({ kind: "retrieval", node: "knowledge", title: "Knowledge retrieved", detail: `${event.rag_chunks.length} relevant chunks`, status: "complete" });
-            if (event.web_sources?.length) emitSystemEvent({ kind: "web", node: "web", title: "Web sources found", detail: `${event.web_sources.length} live sources`, status: "complete" });
+            emitTelemetry({ kind: "system", node: "router", title: "Request routed", detail: event.model_display_name || "Selecting model", status: "running" });
+            if (event.rag_chunks?.length) emitTelemetry({ kind: "retrieval", node: "knowledge", title: "Knowledge retrieved", detail: `${event.rag_chunks.length} relevant chunks`, status: "complete" });
+            if (event.web_sources?.length) emitTelemetry({ kind: "web", node: "web", title: "Web sources found", detail: `${event.web_sources.length} live sources`, status: "complete" });
             resolvedConversationId = event.conversation_id;
             markConversationActive(event.conversation_id, {
               model: event.model_display_name,
@@ -184,9 +182,9 @@ export default function ChatView({ onConversationChange }) {
             if (!conversationId) onConversationChange?.();
           } else if (event.type === "workflow") {
             setWorkflowStatus(event);
-            emitSystemEvent({ kind: "model", node: event.status === "planning" ? "router" : "model", title: `Workflow ${event.status}`, detail: event.label || "Agent processing", status: event.status === "complete" ? "complete" : "running" });
+            emitTelemetry({ kind: "model", node: event.status === "planning" ? "router" : "model", title: `Workflow ${event.status}`, detail: event.label || "Agent processing", status: event.status === "complete" ? "complete" : "running" });
           } else if (event.type === "delta") {
-            emitSystemEvent({ kind: "model", node: "model", title: "Model streaming", detail: "Generating response tokens", status: "running" });
+            emitTelemetry({ kind: "model", node: "model", title: "Model streaming", detail: "Generating response tokens", status: "running" });
             setMessages((prev) => {
               const next = [...prev];
               const last = next[next.length - 1];
@@ -197,11 +195,17 @@ export default function ChatView({ onConversationChange }) {
             });
           } else if (event.type === "error") {
             setStreamError(event.message);
-            emitSystemEvent({ kind: "model", node: "model", title: "Processing failed", detail: event.message, status: "error" });
+            emitTelemetry({ kind: "model", node: "model", title: "Processing failed", detail: event.message, status: "error" });
           } else if (event.type === "done") {
             if (event.error) setStreamError(event.error);
             markConversationComplete(resolvedConversationId || conversationId);
-            emitSystemEvent({ kind: "chat", node: "output", title: event.error ? "Response failed" : "Response delivered", detail: event.error || "Stream complete", status: event.error ? "error" : "complete" });
+            emitTelemetry({ kind: "chat", node: "output", title: event.error ? "Response failed" : "Response delivered", detail: event.error || "Stream complete", status: event.error ? "error" : "complete" });
+            if (!event.error && resolvedConversationId) {
+              api.post("/api/v1/memories/suggest", {
+                model_id: selectedModelId,
+                conversation_id: resolvedConversationId,
+              }).then(setMemorySuggestions).catch(() => {});
+            }
           }
         },
         controller.signal
@@ -304,11 +308,7 @@ export default function ChatView({ onConversationChange }) {
         <button
           type="button"
           className={`web-toggle ${webSearch ? "active" : ""}`}
-          onPointerDown={(event) => {
-            event.preventDefault();
-            toggleWebSearch();
-          }}
-          onKeyDown={toggleOnKeyDown(toggleWebSearch)}
+          onClick={toggleWebSearch}
           aria-pressed={webSearch}
           title="Search the live web and use the results as context"
         >
@@ -317,11 +317,7 @@ export default function ChatView({ onConversationChange }) {
         <button
           type="button"
           className={`web-toggle ${agentWorkflow ? "active" : ""}`}
-          onPointerDown={(event) => {
-            event.preventDefault();
-            toggleAgentWorkflow();
-          }}
-          onKeyDown={toggleOnKeyDown(toggleAgentWorkflow)}
+          onClick={toggleAgentWorkflow}
           aria-pressed={agentWorkflow}
           title="Plan and execute this request in multiple bounded steps"
         >
@@ -373,6 +369,41 @@ export default function ChatView({ onConversationChange }) {
           <MessageList messages={messages} streaming={streaming} onRegenerate={regenerateLast} />
         )}
       </div>
+
+      {memorySuggestions.length > 0 && (
+        <div className="memory-suggestions" role="dialog" aria-label="Memory suggestions">
+          <style>{`
+            .memory-suggestions { margin: 0 var(--space-5) var(--space-3); padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-2); }
+            .memory-suggestions h3 { margin: 0 0 6px; font-size: 13px; }
+            .memory-suggestion { display:flex; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--border-subtle); font-size:13px; }
+            .memory-suggestion span { flex:1; color:var(--text-secondary); }
+          `}</style>
+          <h3>Save useful memory?</h3>
+          {memorySuggestions.map((suggestion, index) => (
+            <div className="memory-suggestion" key={`${suggestion.content}-${index}`}>
+              <span>{suggestion.content}</span>
+              <button
+                className="btn btn-primary"
+                disabled={savingMemory === index}
+                onClick={async () => {
+                  setSavingMemory(index);
+                  try {
+                    await api.post("/api/v1/memories", suggestion);
+                    setMemorySuggestions((current) => current.filter((_, itemIndex) => itemIndex !== index));
+                  } finally {
+                    setSavingMemory(null);
+                  }
+                }}
+              >
+                Add
+              </button>
+              <button className="btn btn-ghost" onClick={() => setMemorySuggestions((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                Skip
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {streamError && (
         <div className="error-text" style={{ padding: "0 var(--space-5) var(--space-2)" }}>

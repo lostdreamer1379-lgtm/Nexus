@@ -18,8 +18,22 @@ class RefineRequest(BaseModel):
     model_id: str
 
 
+class MemorySuggestionRequest(BaseModel):
+    model_id: str
+    conversation_id: str
+
+
+class MemoryCreate(BaseModel):
+    content: str
+    category: str = "fact"
+    confidence: float = 0.8
+    source_conversation_id: str | None = None
+
+
 class MemoryUpdate(BaseModel):
-    status: str
+    content: str | None = None
+    category: str | None = None
+    status: str | None = None
 
 
 def _owned_model(db: Session, model_id: str, user: User) -> UserModel:
@@ -35,6 +49,104 @@ def _owned_model(db: Session, model_id: str, user: User) -> UserModel:
 def list_memories(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = db.query(UserMemory).filter(UserMemory.user_id == current_user.id).order_by(UserMemory.updated_at.desc()).all()
     return [_out(row) for row in rows]
+
+
+@router.post("")
+def create_memory(
+    payload: MemoryCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    content = payload.content.strip()
+    if not content or len(content) > 1000:
+        raise HTTPException(status_code=400, detail="Memory content must be between 1 and 1000 characters")
+    if payload.category not in {"preference", "profile", "workflow", "fact"}:
+        raise HTTPException(status_code=400, detail="Invalid memory category")
+    duplicate = (
+        db.query(UserMemory)
+        .filter(UserMemory.user_id == current_user.id, UserMemory.content.ilike(content))
+        .first()
+    )
+    if duplicate:
+        duplicate.status = "approved"
+        duplicate.last_confirmed_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(duplicate)
+        return _out(duplicate)
+    row = UserMemory(
+        user_id=current_user.id,
+        content=content,
+        category=payload.category,
+        confidence=min(max(payload.confidence, 0.0), 1.0),
+        status="approved",
+        source_conversation_id=payload.source_conversation_id,
+        last_confirmed_at=datetime.now(timezone.utc),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _out(row)
+
+
+@router.post("/suggest")
+async def suggest_memories(
+    payload: MemorySuggestionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    model = _owned_model(db, payload.model_id, current_user)
+    conversation = (
+        db.query(Conversation)
+        .filter(Conversation.id == payload.conversation_id, Conversation.user_id == current_user.id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    messages = (
+        db.query(Message)
+        .filter(Message.conversation_id == conversation.id)
+        .order_by(Message.created_at.desc())
+        .limit(6)
+        .all()
+    )
+    if not messages:
+        return []
+    prompt = (
+        "Identify durable, user-specific information from this completed conversation that could "
+        "improve future answers. Return ONLY JSON array with at most 3 items in this format: "
+        '[{"content":"short fact or preference","category":"preference|profile|workflow|fact","confidence":0.0}]. '
+        "Only suggest information explicitly stated by the user or clearly confirmed by them. "
+        "Do not suggest one-off tasks, information about other people, secrets, passwords, health, "
+        "politics, religion, or sensitive identity traits. If nothing is useful, return [].\n\n"
+        + "\n".join(f"{message.role}: {message.content}" for message in reversed(messages))
+    )
+    adapter = build_adapter(model.connection)
+    parts = []
+    async for chunk in adapter.stream_chat(model.provider_model_id, [ChatMessage(role="user", content=prompt)]):
+        if chunk.error:
+            raise HTTPException(status_code=502, detail=chunk.error)
+        if chunk.delta:
+            parts.append(chunk.delta)
+        if chunk.done:
+            break
+    try:
+        text = "".join(parts)
+        start, end = text.find("["), text.rfind("]")
+        extracted = json.loads(text[start : end + 1]) if start >= 0 and end > start else []
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    suggestions = []
+    for item in extracted[:3]:
+        content = str(item.get("content", "")).strip()
+        category = str(item.get("category", "fact"))
+        if content and category in {"preference", "profile", "workflow", "fact"}:
+            suggestions.append({
+                "content": content[:1000],
+                "category": category,
+                "confidence": min(max(float(item.get("confidence", 0.7)), 0.0), 1.0),
+                "source_conversation_id": conversation.id,
+            })
+    return suggestions
 
 
 @router.post("/refine")
@@ -112,17 +224,41 @@ def update_memory(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if payload.status not in {"pending", "approved", "archived"}:
+    if payload.status is not None and payload.status not in {"pending", "approved", "archived"}:
         raise HTTPException(status_code=400, detail="Invalid memory status")
     row = db.query(UserMemory).filter(UserMemory.id == memory_id, UserMemory.user_id == current_user.id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Memory not found")
-    row.status = payload.status
+    if payload.content is not None:
+        content = payload.content.strip()
+        if not content or len(content) > 1000:
+            raise HTTPException(status_code=400, detail="Memory content must be between 1 and 1000 characters")
+        row.content = content
+    if payload.category is not None:
+        if payload.category not in {"preference", "profile", "workflow", "fact"}:
+            raise HTTPException(status_code=400, detail="Invalid memory category")
+        row.category = payload.category
+    if payload.status is not None:
+        row.status = payload.status
     if payload.status == "approved":
         row.last_confirmed_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
     return _out(row)
+
+
+@router.delete("/{memory_id}")
+def delete_memory(
+    memory_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = db.query(UserMemory).filter(UserMemory.id == memory_id, UserMemory.user_id == current_user.id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    db.delete(row)
+    db.commit()
+    return {"deleted": True}
 
 
 @router.delete("")

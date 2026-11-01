@@ -30,6 +30,7 @@ function ago(timestamp) {
 
 export default function SystemVisualizer() {
   const [events, setEvents] = useState([]);
+  const [routeEvents, setRouteEvents] = useState([]);
   const [now, setNow] = useState(Date.now());
   const pendingEvents = useRef([]);
   const flushRef = useRef(null);
@@ -46,7 +47,16 @@ export default function SystemVisualizer() {
       if (event.type === "reset") {
         pendingEvents.current = [];
         setEvents([]);
+        setRouteEvents([]);
         return;
+      }
+      if (event.runId) {
+        setRouteEvents((current) => {
+          const last = current[current.length - 1];
+          if (!last || last.runId !== event.runId) return [event];
+          if (!event.node || event.node === last.node) return current;
+          return [...current, event];
+        });
       }
       pendingEvents.current.push(event);
       if (flushRef.current === null) flushRef.current = window.setTimeout(flush, 80);
@@ -64,17 +74,22 @@ export default function SystemVisualizer() {
 
   const activeNodes = useMemo(() => {
     const active = new Set(["input"]);
-    events.filter((event) => now - event.timestamp < 2600).forEach((event) => {
+    const sequence = routeEvents.length
+      ? routeEvents
+      : events.filter((event) => now - event.timestamp < 2600);
+    sequence.forEach((event) => {
       if (event.node) active.add(event.node);
     });
     return active;
-  }, [events, now]);
+  }, [events, now, routeEvents]);
 
   const activeLinks = useMemo(() => {
     const links = new Set();
-    const recent = events.filter((event) => event.node && now - event.timestamp < 2600);
-    recent.forEach((event, index) => {
-      const previous = recent[index - 1];
+    const sequence = routeEvents.length
+      ? routeEvents
+      : events.filter((event) => event.node && now - event.timestamp < 2600);
+    sequence.filter((event) => event.node).forEach((event, index, nodeEvents) => {
+      const previous = nodeEvents[index - 1];
       if (!previous?.node || previous.node === event.node) return;
       const forward = `${previous.node}-${event.node}`;
       const reverse = `${event.node}-${previous.node}`;

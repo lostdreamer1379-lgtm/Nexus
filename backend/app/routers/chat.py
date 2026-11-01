@@ -152,7 +152,8 @@ async def chat_completions(
     if approved_memories:
         memory_context = (
             "The following are user-approved preferences and facts. Use them only when relevant; "
-            "do not reveal or overemphasize them:\n"
+            "do not reveal or overemphasize them. You may connect related memories to provide more "
+            "meaningful, personalized insights, but do not invent facts or make sensitive inferences:\n"
             + "\n".join(f"- {memory.content}" for memory in approved_memories)
         )
         chat_messages = [ChatMessage(role="system", content=memory_context)] + chat_messages
