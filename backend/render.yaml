@@ -7,14 +7,12 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: starter
+    plan: free
     envVars:
       - key: ENVIRONMENT
         value: production
       - key: DATABASE_URL
-        fromDatabase:
-          name: nexus-ai-db
-          property: connectionString
+        sync: false # Supabase PostgreSQL connection string
       - key: SECRET_KEY
         generateValue: true
       - key: ENCRYPTION_KEY
@@ -26,10 +24,6 @@ services:
       - key: COOKIE_SAMESITE
         value: "none"
       - key: RAG_UPLOAD_DIR
-        value: /data/rag_uploads  # mount a Render persistent disk at /data
+        value: /tmp/rag_uploads  # free Render storage is ephemeral
       - key: RAG_MAX_FILE_MB
         value: "50"
-
-databases:
-  - name: nexus-ai-db
-    plan: starter

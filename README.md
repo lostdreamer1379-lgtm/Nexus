@@ -1049,7 +1049,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Production requirements:
 
-1. Use PostgreSQL or another durable database.
+1. Use Supabase PostgreSQL or another durable database.
 2. Set strong random `SECRET_KEY`.
 3. Set a durable `ENCRYPTION_KEY`.
 4. Set exact `CORS_ORIGINS`.
@@ -1061,6 +1061,32 @@ Production requirements:
 9. Do not rely on development `create_all()` as the production migration
    mechanism.
 10. Configure provider and database network timeouts.
+
+### Supabase PostgreSQL
+
+For a free database deployment, create a project at
+[supabase.com](https://supabase.com), then open **Project Settings →
+Database → Connection pooling**. Copy the **Session pooler** connection
+string for the backend.
+
+Set the SQLAlchemy driver explicitly:
+
+```env
+DATABASE_URL=postgresql+psycopg2://postgres.PROJECT_REF:PASSWORD@HOST:5432/postgres
+```
+
+If you use Supabase's transaction pooler, use its port `6543`. URL-encode
+special characters in the database password, including `@`, `:`, `/`, `#`,
+and `%`.
+
+The Render Blueprint leaves `DATABASE_URL` as a manually supplied secret and
+does not create a Render PostgreSQL database. The container runs
+`alembic upgrade head` against Supabase before starting FastAPI. Never commit
+the Supabase password or connection string.
+
+The free Render web service uses `/tmp/rag_uploads`, so uploaded documents are
+ephemeral and can disappear after a restart or redeploy. Use Supabase Storage,
+S3, or another object-storage service before relying on production RAG files.
 
 ### Alembic
 
