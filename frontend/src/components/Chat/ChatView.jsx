@@ -36,6 +36,15 @@ export default function ChatView({ onConversationChange }) {
   const contextLength = selectedModel?.context_length;
   const remainingTokens = contextLength ? Math.max(0, contextLength - usedTokens) : null;
 
+  const toggleWebSearch = () => setWebSearch((value) => !value);
+  const toggleAgentWorkflow = () => setAgentWorkflow((value) => !value);
+  const toggleOnKeyDown = (toggle) => (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggle();
+    }
+  };
+
   // Load enabled models once
   useEffect(() => {
     api
@@ -249,6 +258,7 @@ export default function ChatView({ onConversationChange }) {
         .web-toggle {
           border: 1px solid var(--border); background: var(--bg-2); color: var(--text-secondary);
           border-radius: var(--radius-md); padding: 6px 10px; font-size: 13px; cursor: pointer;
+          transition: none; user-select: none;
         }
         .web-toggle:hover, .web-toggle.active {
           border-color: var(--accent); color: var(--accent); background: var(--accent-dim);
@@ -292,15 +302,27 @@ export default function ChatView({ onConversationChange }) {
           </>
         )}
         <button
+          type="button"
           className={`web-toggle ${webSearch ? "active" : ""}`}
-          onClick={() => setWebSearch((value) => !value)}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            toggleWebSearch();
+          }}
+          onKeyDown={toggleOnKeyDown(toggleWebSearch)}
+          aria-pressed={webSearch}
           title="Search the live web and use the results as context"
         >
           Web
         </button>
         <button
+          type="button"
           className={`web-toggle ${agentWorkflow ? "active" : ""}`}
-          onClick={() => setAgentWorkflow((value) => !value)}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            toggleAgentWorkflow();
+          }}
+          onKeyDown={toggleOnKeyDown(toggleAgentWorkflow)}
+          aria-pressed={agentWorkflow}
           title="Plan and execute this request in multiple bounded steps"
         >
           Agent
