@@ -155,33 +155,34 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
     <div className="msg-list">
       <style>{`
         .msg-list {
-          max-width: 760px; margin: 0 auto;
+          width: 100%; max-width: 760px; margin: 0 auto; box-sizing: border-box;
           padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-5);
         }
-        .msg-row { display: flex; flex-direction: column; gap: 6px; }
+        .msg-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
         .msg-role { font-size: 12px; color: var(--text-tertiary); font-weight: 500; }
         .msg-bubble {
+          min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word;
           font-size: 14.5px; line-height: 1.65; color: var(--text-primary);
           padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
         }
-        .msg-row.user .msg-bubble { background: var(--bg-2); align-self: flex-end; max-width: 80%; }
+        .msg-row.user .msg-bubble { background: var(--bg-2); align-self: flex-end; width: fit-content; max-width: 80%; }
         .msg-row.user { align-items: flex-end; }
         .msg-row.assistant .msg-bubble { padding-left: 0; padding-right: 0; }
         .msg-bubble p { margin: 0 0 0.75em; }
         .msg-bubble p:last-child { margin-bottom: 0; }
         .msg-bubble pre {
           background: var(--bg-2); border: 1px solid var(--border-subtle);
-          border-radius: var(--radius-sm); padding: var(--space-3);
-          overflow-x: auto; font-size: 13px;
+          border-radius: var(--radius-sm); padding: var(--space-3); box-sizing: border-box;
+          max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 13px;
         }
-        .msg-bubble code { font-family: var(--font-mono); }
+        .msg-bubble code { font-family: var(--font-mono); overflow-wrap: anywhere; }
         .msg-bubble :not(pre) > code {
           background: var(--bg-2); padding: 2px 5px; border-radius: 4px; font-size: 0.9em;
         }
         .msg-bubble ul, .msg-bubble ol { padding-left: 1.3em; }
-        .table-scroll { overflow-x: auto; margin: 12px 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
-        .msg-bubble table { border-collapse: collapse; min-width: 100%; font-size: 13px; }
-        .msg-bubble th, .msg-bubble td { border-bottom: 1px solid var(--border-subtle); padding: 8px 10px; text-align: left; white-space: nowrap; }
+        .table-scroll { max-width: 100%; overflow-x: auto; margin: 12px 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+        .msg-bubble table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+        .msg-bubble th, .msg-bubble td { border-bottom: 1px solid var(--border-subtle); padding: 8px 10px; text-align: left; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
         .msg-bubble th { background: var(--bg-2); color: var(--text-primary); font-weight: 600; }
         .msg-bubble tr:last-child td { border-bottom: none; }
         .msg-actions { display: flex; gap: var(--space-3); margin-top: 2px; }
@@ -235,6 +236,15 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
           font-size: 12.5px; color: var(--text-secondary); margin: 0;
           line-height: 1.5; display: -webkit-box;
           -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        @media (max-width: 600px) {
+          .msg-list { padding: var(--space-4) var(--space-3); }
+          .msg-row.user .msg-bubble { max-width: 92%; }
+          .msg-bubble { font-size: 14px; padding-left: var(--space-3); padding-right: var(--space-3); }
+          .msg-row.assistant .msg-bubble { padding-left: 0; padding-right: 0; }
+          .msg-bubble pre { padding: 9px; font-size: 12px; }
+          .msg-bubble table { font-size: 11px; }
+          .msg-bubble th, .msg-bubble td { padding: 5px 6px; line-height: 1.35; }
         }
       `}</style>
 
