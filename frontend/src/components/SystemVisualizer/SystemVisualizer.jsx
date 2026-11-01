@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, BrainCircuit, CheckCircle2, Database, Globe2, MessageSquare,
   Network, Radio, Server, Sparkles, Upload, Workflow, XCircle,
@@ -31,23 +31,57 @@ function ago(timestamp) {
 export default function SystemVisualizer() {
   const [events, setEvents] = useState([]);
   const [now, setNow] = useState(Date.now());
-
-  useEffect(() => subscribeSystemEvents((event) => {
-    if (event.type === "reset") setEvents([]);
-    else setEvents((current) => [...current.slice(-59), event]);
-  }), []);
+  const pendingEvents = useRef([]);
+  const frameRef = useRef(null);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const unsubscribe = subscribeSystemEvents((event) => {
+      if (event.type === "reset") {
+        pendingEvents.current = [];
+        setEvents([]);
+        return;
+      }
+      pendingEvents.current.push(event);
+      if (frameRef.current !== null) return;
+      frameRef.current = requestAnimationFrame(() => {
+        const nextEvents = pendingEvents.current.splice(0);
+        frameRef.current = null;
+        if (nextEvents.length) {
+          setEvents((current) => [...current, ...nextEvents].slice(-60));
+        }
+      });
+    });
+    return () => {
+      unsubscribe();
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(timer);
   }, []);
 
   const activeNodes = useMemo(() => {
     const active = new Set(["input"]);
-    events.filter((event) => now - event.timestamp < 3500).forEach((event) => {
+    events.filter((event) => now - event.timestamp < 2600).forEach((event) => {
       if (event.node) active.add(event.node);
     });
     return active;
+  }, [events, now]);
+
+  const activeLinks = useMemo(() => {
+    const links = new Set();
+    const recent = events.filter((event) => event.node && now - event.timestamp < 2600);
+    recent.forEach((event, index) => {
+      const previous = recent[index - 1];
+      if (!previous?.node || previous.node === event.node) return;
+      const forward = `${previous.node}-${event.node}`;
+      const reverse = `${event.node}-${previous.node}`;
+      if (LINKS.some(([from, to]) => `${from}-${to}` === forward)) links.add(forward);
+      else if (LINKS.some(([from, to]) => `${from}-${to}` === reverse)) links.add(reverse);
+    });
+    return links;
   }, [events, now]);
 
   const latest = events.slice(-1)[0];
@@ -69,9 +103,13 @@ export default function SystemVisualizer() {
         .viz-card { border:1px solid var(--border-subtle); background:rgba(18,20,30,.68); border-radius:18px; box-shadow:0 18px 70px rgba(0,0,0,.2); }
         .viz-map { position:relative; min-height:470px; overflow:hidden; }
         .viz-grid { position:absolute; inset:0; opacity:.2; background-image:linear-gradient(rgba(148,163,184,.16) 1px, transparent 1px),linear-gradient(90deg,rgba(148,163,184,.16) 1px,transparent 1px); background-size:42px 42px; }
-        .viz-lines { position:absolute; inset:0; width:100%; height:100%; }
-        .viz-link { stroke:var(--border); stroke-width:1.2; opacity:.7; }
-        .viz-link.active { stroke:#8b5cf6; stroke-width:2.5; stroke-dasharray:8 8; animation:viz-flow 1s linear infinite; }
+        .viz-lines { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+        .viz-link { fill:none; stroke:var(--border); stroke-width:1.1; opacity:.65; vector-effect:non-scaling-stroke; }
+        .viz-link-glow { fill:none; stroke:#8b5cf6; stroke-width:7; opacity:0; filter:url(#viz-glow); vector-effect:non-scaling-stroke; transition:opacity .25s ease; }
+        .viz-link-core { fill:none; stroke:#c4b5fd; stroke-width:1.8; stroke-linecap:round; opacity:0; vector-effect:non-scaling-stroke; transition:opacity .25s ease; }
+        .viz-link-glow.active, .viz-link-core.active { opacity:1; }
+        .viz-packet { fill:#fff; filter:url(#viz-glow); }
+        .viz-packet-halo { fill:#a78bfa; opacity:.9; filter:url(#viz-glow); }
         .viz-node { position:absolute; transform:translate(-50%,-50%); width:112px; text-align:center; transition:transform .25s, filter .25s; }
         .viz-node.active { transform:translate(-50%,-50%) scale(1.12); filter:drop-shadow(0 0 16px var(--node-color)); }
         .viz-node-orb { width:48px; height:48px; margin:auto; display:flex; align-items:center; justify-content:center; border-radius:50%; color:var(--node-color); border:1px solid color-mix(in srgb, var(--node-color) 65%, transparent); background:color-mix(in srgb, var(--node-color) 13%, var(--bg-1)); }
@@ -94,8 +132,11 @@ export default function SystemVisualizer() {
         .viz-stat b { display:block; font-size:20px; color:var(--text-primary); }
         .viz-stat span { color:var(--text-tertiary); font-size:11px; }
         @keyframes viz-pulse { 50% { opacity:.35; transform:scale(.7); } }
-        @keyframes viz-flow { to { stroke-dashoffset:-16; } }
         @keyframes viz-radar { 50% { transform:translate(-50%,-50%) scale(1.45); opacity:.2; } }
+        @media (prefers-reduced-motion: reduce) {
+          .viz-node, .viz-link-glow, .viz-link-core, .viz-radar, .viz-dot { animation:none !important; transition:none !important; }
+          .viz-packet, .viz-packet-halo { display:none; }
+        }
         @media (max-width:760px) { .visualizer-page { padding:16px; } .viz-map { min-height:390px; } .viz-bottom { grid-template-columns:1fr; } .viz-node { width:80px; } .viz-node-orb { width:40px; height:40px; } .viz-stats { grid-template-columns:repeat(2,1fr); } .viz-header { flex-direction:column; } }
       `}</style>
       <div className="visualizer-inner">
@@ -105,12 +146,39 @@ export default function SystemVisualizer() {
         </div>
         <div className="viz-card viz-map">
           <div className="viz-grid" /><div className="viz-radar" />
-          <svg className="viz-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <svg className="viz-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <filter id="viz-glow" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="1.8" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
             {LINKS.map(([from, to]) => {
               const a = NODES.find((node) => node.id === from);
               const b = NODES.find((node) => node.id === to);
-              const active = activeNodes.has(from) && activeNodes.has(to);
-              return <line key={`${from}-${to}`} className={`viz-link ${active ? "active" : ""}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />;
+              const key = `${from}-${to}`;
+              const active = activeLinks.has(key);
+              const curve = Math.abs(b.x - a.x) > 12 ? (a.y + b.y) / 2 + (a.y === b.y ? -5 : 0) : (a.x + b.x) / 2;
+              const path = a.y === b.y
+                ? `M ${a.x} ${a.y} Q ${curve} ${a.y - 5} ${b.x} ${b.y}`
+                : `M ${a.x} ${a.y} Q ${(a.x + b.x) / 2} ${curve} ${b.x} ${b.y}`;
+              return (
+                <g key={key}>
+                  <path className="viz-link" d={path} />
+                  <path className={`viz-link-glow ${active ? "active" : ""}`} d={path} />
+                  <path className={`viz-link-core ${active ? "active" : ""}`} d={path} />
+                  {active && (
+                    <>
+                      <circle className="viz-packet-halo" r="2.4">
+                        <animateMotion dur="1.05s" repeatCount="indefinite" path={path} />
+                      </circle>
+                      <circle className="viz-packet" r="1.05">
+                        <animateMotion dur="1.05s" begin=".35s" repeatCount="indefinite" path={path} />
+                      </circle>
+                    </>
+                  )}
+                </g>
+              );
             })}
           </svg>
           {NODES.map((node) => {

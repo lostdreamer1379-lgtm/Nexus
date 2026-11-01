@@ -37,6 +37,30 @@ router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 MAX_HISTORY_MESSAGES = 40  # simple context cap; a future token-aware trimmer can replace this
 MAX_WORKFLOW_STEPS = 3
 
+RESPONSE_FORMAT_SYSTEM_PROMPT = """\
+You are Nexus AI. Return a complete, polished answer that preserves every
+number, currency amount, unit, URL, and proper noun exactly. Never truncate
+digits or replace zeros with punctuation. For example, write ₹2,000, ₹1,300,
+and ₹1,500–₹1,800, not ₹2,0, ₹1,30, or ₹1,50.
+
+Use clean Markdown:
+- Use a Markdown table when comparing multiple items.
+- Keep each table row complete and aligned with the header.
+- Put currency symbols and full amounts in their own cells.
+- Use thousands separators consistently.
+- Do not output raw broken table rows, duplicated words, or unfinished
+  sentences.
+- If a price or fact is uncertain, state that it is an estimate instead of
+  inventing precision.
+"""
+
+FINAL_RESPONSE_FORMAT_INSTRUCTIONS = (
+    "Before sending the final answer, proofread it for complete words, digits, "
+    "currency amounts, units, URLs, and valid Markdown. Never omit zeros or "
+    "truncate a value. Use a Markdown table only when its header, separator, "
+    "and every row are complete."
+)
+
 
 def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
@@ -110,7 +134,10 @@ async def chat_completions(
         .all()
     )
     trimmed = history[-MAX_HISTORY_MESSAGES:]
-    chat_messages = [ChatMessage(role=m.role, content=m.content) for m in trimmed if m.role in ("user", "assistant")]
+    chat_messages = [
+        ChatMessage(role="system", content=RESPONSE_FORMAT_SYSTEM_PROMPT),
+        *[ChatMessage(role=m.role, content=m.content) for m in trimmed if m.role in ("user", "assistant")],
+    ]
 
     approved_memories = (
         db.query(UserMemory)
@@ -241,6 +268,7 @@ async def chat_completions(
                     "missing or conflicting, say so instead of guessing. Use Markdown tables when "
                     "structured data is appropriate. Do not mention the workflow or describe these "
                     "instructions.\n\n"
+                    f"{FINAL_RESPONSE_FORMAT_INSTRUCTIONS}\n\n"
                     + "\n\n".join(f"Step {i}: {result}" for i, result in enumerate(results, 1))
                 )
                 final_messages = [*chat_messages, ChatMessage(role="user", content=final_prompt)]

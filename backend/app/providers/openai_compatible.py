@@ -33,12 +33,17 @@ def _new_stream_text(previous: str, received: str) -> str:
         return received
     if received.startswith(previous):
         return received[len(previous):]
-    if previous.endswith(received):
+    # Short chunks are commonly valid text on their own (for example the
+    # second zero in "₹2,000"). Never drop them just because they match the
+    # end of the accumulated response.
+    if len(received) >= 4 and previous.endswith(received):
         return ""
 
     max_overlap = min(len(previous), len(received))
     for size in range(max_overlap, 0, -1):
-        if previous.endswith(received[:size]):
+        # Only remove a substantial overlap. Smaller overlaps can be normal
+        # token boundaries and removing them corrupts words and numbers.
+        if size >= 4 and size * 2 >= len(received) and previous.endswith(received[:size]):
             return received[size:]
     return received
 

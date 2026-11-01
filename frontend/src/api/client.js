@@ -79,26 +79,34 @@ export async function streamChatCompletion({ conversationId, modelId, message, k
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
+  const processBuffer = () => {
     const parts = buffer.split("\n\n");
     buffer = parts.pop() ?? "";
 
     for (const part of parts) {
-      const line = part.trim();
-      if (!line.startsWith("data:")) continue;
-      const jsonStr = line.slice("data:".length).trim();
-      if (!jsonStr) continue;
+      const dataLines = part
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice("data:".length).trim())
+        .filter(Boolean);
+      if (!dataLines.length) continue;
       try {
-        const event = JSON.parse(jsonStr);
-        onEvent(event);
+        onEvent(JSON.parse(dataLines.join("\n")));
       } catch {
-        /* ignore malformed chunk */
+        // Ignore malformed server events without interrupting the stream.
       }
     }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      buffer += decoder.decode();
+      processBuffer();
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    processBuffer();
   }
 }
 
