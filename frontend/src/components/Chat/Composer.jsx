@@ -1,15 +1,11 @@
 import { useRef, useState } from "react";
 import { ArrowUp, ChevronDown, Plus, Square, X } from "lucide-react";
-import ModelSelector from "./ModelSelector.jsx";
 
 export default function Composer({
   onSend,
   onStop,
   streaming,
   disabled,
-  models,
-  selectedModelId,
-  onSelectModel,
   webSearch,
   agentWorkflow,
   onToggleWeb,
@@ -131,9 +127,9 @@ export default function Composer({
             {text.trim() && !optionsOpen ? <Plus size={18} /> : optionsOpen ? <X size={15} /> : (
               <>
                 <span className="composer-options-label">
-                  {models.find((model) => model.id === selectedModelId)?.display_name || "Select model"}
-                  {webSearch ? " · Web" : ""}
-                  {agentWorkflow ? " · Agent" : ""}
+                  {webSearch || agentWorkflow
+                    ? [webSearch && "Web", agentWorkflow && "Agent"].filter(Boolean).join(" · ")
+                    : "Options"}
                 </span>
                 <ChevronDown size={14} />
               </>
@@ -141,9 +137,6 @@ export default function Composer({
           </button>
           {optionsOpen && (
             <div className="composer-options">
-              <div className="composer-model">
-                <ModelSelector models={models} selectedModelId={selectedModelId} onSelect={onSelectModel} />
-              </div>
               <button type="button" className={`composer-option ${webSearch ? "active" : ""}`} onClick={onToggleWeb} aria-pressed={webSearch}>
                 Web
               </button>

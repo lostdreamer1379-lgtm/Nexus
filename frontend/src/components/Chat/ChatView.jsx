@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import { api, streamChatCompletion, ApiError } from "../../api/client";
+import ModelSelector from "./ModelSelector.jsx";
 import KBSelector from "./KBSelector.jsx";
 import MessageList from "./MessageList.jsx";
 import Composer from "./Composer.jsx";
@@ -293,6 +294,7 @@ export default function ChatView({ onConversationChange }) {
       `}</style>
 
       <div className="chat-header">
+        <ModelSelector models={models} selectedModelId={selectedModelId} onSelect={setSelectedModelId} />
         {knowledgeBases.length > 0 && (
           <>
             <div className="chat-header-divider" />
@@ -396,9 +398,6 @@ export default function ChatView({ onConversationChange }) {
         onStop={stopStreaming}
         streaming={streaming}
         disabled={!selectedModelId}
-        models={models}
-        selectedModelId={selectedModelId}
-        onSelectModel={setSelectedModelId}
         webSearch={webSearch}
         agentWorkflow={agentWorkflow}
         onToggleWeb={toggleWebSearch}
