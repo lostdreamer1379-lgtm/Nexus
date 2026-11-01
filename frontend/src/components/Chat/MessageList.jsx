@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, RotateCcw, AlertTriangle, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { Copy, Check, RotateCcw, AlertTriangle, BookOpen, ChevronDown, ChevronUp, BrainCircuit } from "lucide-react";
 
 function copyableResponse(text) {
   const lines = text.split("\n");
@@ -129,7 +129,7 @@ function WebSources({ sources }) {
   );
 }
 
-export default function MessageList({ messages, streaming, onRegenerate }) {
+export default function MessageList({ messages, streaming, onRegenerate, onSaveMemory, savingMemory, savedMemoryIds }) {
   const bottomRef = useRef(null);
   const previousMessageCount = useRef(messages.length);
 
@@ -271,14 +271,22 @@ export default function MessageList({ messages, streaming, onRegenerate }) {
           {m.role === "assistant" && m.web_sources?.length > 0 && (
             <WebSources sources={m.web_sources} />
           )}
-          {m.role === "assistant" && m.content && !streaming && (
+          {m.content && !streaming && (
             <div className="msg-actions">
               <CopyButton text={m.content} />
-              {i === lastAssistantIndex && (
+              {m.role === "assistant" && i === lastAssistantIndex && (
                 <button className="msg-action" onClick={onRegenerate}>
                   <RotateCcw size={13} /> Regenerate
                 </button>
               )}
+              <button
+                className="msg-action"
+                onClick={() => onSaveMemory(m)}
+                disabled={savingMemory === m.id || savedMemoryIds?.has(m.id)}
+              >
+                <BrainCircuit size={13} />
+                {savedMemoryIds?.has(m.id) ? "Saved to memory" : savingMemory === m.id ? "Saving…" : "Save to memory"}
+              </button>
             </div>
           )}
         </div>

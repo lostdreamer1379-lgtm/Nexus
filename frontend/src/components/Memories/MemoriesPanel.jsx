@@ -11,7 +11,9 @@ export default function MemoriesPanel() {
   const [error, setError] = useState(null);
 
   const load = () => api.get("/api/v1/memories").then(setMemories).catch((err) => setError(err.message));
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const update = async (memory, patch) => {
     try {

@@ -1,16 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
 import ChatView from "../Chat/ChatView.jsx";
-import ProviderManager from "../Providers/ProviderManager.jsx";
-import ModelLibrary from "../Models/ModelLibrary.jsx";
-import SettingsPanel from "../Settings/SettingsPanel.jsx";
-import KnowledgeBaseManager from "../RAG/KnowledgeBaseManager.jsx";
 import { Menu } from "lucide-react";
-import SystemVisualizer from "../SystemVisualizer/SystemVisualizer.jsx";
-import MemoriesPanel from "../Memories/MemoriesPanel.jsx";
 import { api } from "../../api/client";
 import { applyTheme } from "../../utils/theme.js";
+
+const ProviderManager = lazy(() => import("../Providers/ProviderManager.jsx"));
+const ModelLibrary = lazy(() => import("../Models/ModelLibrary.jsx"));
+const SettingsPanel = lazy(() => import("../Settings/SettingsPanel.jsx"));
+const KnowledgeBaseManager = lazy(() => import("../RAG/KnowledgeBaseManager.jsx"));
+const SystemVisualizer = lazy(() => import("../SystemVisualizer/SystemVisualizer.jsx"));
+const MemoriesPanel = lazy(() => import("../Memories/MemoriesPanel.jsx"));
+
+function RouteLoader() {
+  return <div className="route-loader" role="status" aria-label="Loading page"><div className="spinner" /></div>;
+}
 
 export default function AppShell() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -72,6 +77,13 @@ export default function AppShell() {
           flex-direction: column;
           min-height: 0;
         }
+        .route-loader {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--bg-0);
+        }
         .mobile-topbar {
           display: none;
           align-items: center;
@@ -109,16 +121,18 @@ export default function AppShell() {
           <span>Nexus AI</span>
         </div>
 
-        <Routes>
-          <Route path="/" element={<ChatView onConversationChange={bumpConversations} />} />
-          <Route path="/c/:conversationId" element={<ChatView onConversationChange={bumpConversations} />} />
-          <Route path="/providers" element={<ProviderManager />} />
-          <Route path="/models" element={<ModelLibrary />} />
-          <Route path="/knowledge-bases" element={<KnowledgeBaseManager />} />
-          <Route path="/settings" element={<SettingsPanel />} />
-          <Route path="/memories" element={<MemoriesPanel />} />
-          <Route path="/visualizer" element={<SystemVisualizer />} />
-        </Routes>
+        <Suspense fallback={<RouteLoader />}>
+          <Routes>
+            <Route path="/" element={<ChatView onConversationChange={bumpConversations} />} />
+            <Route path="/c/:conversationId" element={<ChatView onConversationChange={bumpConversations} />} />
+            <Route path="/providers" element={<ProviderManager />} />
+            <Route path="/models" element={<ModelLibrary />} />
+            <Route path="/knowledge-bases" element={<KnowledgeBaseManager />} />
+            <Route path="/settings" element={<SettingsPanel />} />
+            <Route path="/memories" element={<MemoriesPanel />} />
+            <Route path="/visualizer" element={<SystemVisualizer />} />
+          </Routes>
+        </Suspense>
       </div>
     </div>
   );

@@ -99,6 +99,24 @@ def test_extraction_image_uses_local_ocr(tmp_path):
 
 
 # ──────────────────────────────────────────────
+# Web retrieval helpers
+# ──────────────────────────────────────────────
+
+def test_web_search_parser_accepts_result_links_and_redirects():
+    from app.rag.web import _search_urls
+
+    html = """
+    <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fone">One</a>
+    <a class="result__url" href="https://example.com/two">Two</a>
+    """
+    results = _search_urls(html)
+    assert results == [
+        ("One", "https://example.com/one"),
+        ("Two", "https://example.com/two"),
+    ]
+
+
+# ──────────────────────────────────────────────
 # Embeddings helpers
 # ──────────────────────────────────────────────
 

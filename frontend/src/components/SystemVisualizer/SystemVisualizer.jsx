@@ -6,18 +6,18 @@ import {
 import { clearSystemEvents, subscribeSystemEvents } from "../../utils/systemEvents.js";
 
 const NODES = [
-  { id: "input", label: "Input", icon: MessageSquare, x: 10, y: 50, color: "#8b5cf6" },
-  { id: "router", label: "Router", icon: Workflow, x: 27, y: 25, color: "#06b6d4" },
-  { id: "memory", label: "Memory", icon: BrainCircuit, x: 27, y: 75, color: "#ec4899" },
-  { id: "knowledge", label: "Knowledge", icon: Database, x: 48, y: 22, color: "#22c55e" },
-  { id: "web", label: "Live web", icon: Globe2, x: 48, y: 78, color: "#f59e0b" },
+  { id: "input", label: "Input", icon: MessageSquare, x: 8, y: 50, color: "#8b5cf6" },
+  { id: "router", label: "Router", icon: Workflow, x: 27, y: 28, color: "#06b6d4" },
+  { id: "memory", label: "Memory", icon: BrainCircuit, x: 27, y: 72, color: "#ec4899" },
+  { id: "knowledge", label: "Knowledge", icon: Database, x: 47, y: 18, color: "#22c55e" },
+  { id: "web", label: "Live web", icon: Globe2, x: 47, y: 82, color: "#f59e0b" },
   { id: "model", label: "Model", icon: Sparkles, x: 70, y: 50, color: "#a78bfa" },
-  { id: "output", label: "Response", icon: CheckCircle2, x: 90, y: 50, color: "#14b8a6" },
+  { id: "output", label: "Response", icon: CheckCircle2, x: 92, y: 50, color: "#14b8a6" },
 ];
 
 const LINKS = [
   ["input", "router"], ["router", "memory"], ["router", "knowledge"],
-  ["router", "web"], ["memory", "model"], ["knowledge", "model"],
+  ["router", "web"], ["router", "model"], ["memory", "model"], ["knowledge", "model"],
   ["web", "model"], ["model", "output"],
 ];
 
@@ -97,7 +97,7 @@ export default function SystemVisualizer() {
       else if (LINKS.some(([from, to]) => `${from}-${to}` === reverse)) links.add(reverse);
     });
     return links;
-  }, [events, now]);
+  }, [events, now, routeEvents]);
 
   const latest = events.slice(-1)[0];
   const counts = useMemo(() => events.reduce((result, event) => {
@@ -108,7 +108,7 @@ export default function SystemVisualizer() {
   return (
     <div className="visualizer-page">
       <style>{`
-        .visualizer-page { height: 100%; overflow-y: auto; padding: 28px; background: radial-gradient(circle at 50% 20%, rgba(99,102,241,.12), transparent 42%), var(--bg-0); }
+        .visualizer-page { height: 100%; overflow-y: auto; padding: 28px; background: radial-gradient(circle at 52% 48%, rgba(99,102,241,.16), transparent 34%), radial-gradient(circle at 50% 20%, rgba(20,184,166,.08), transparent 48%), var(--bg-0); }
         .visualizer-inner { max-width: 1280px; margin: 0 auto; }
         .viz-header { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:22px; }
         .viz-header h1 { margin:0 0 6px; font-size:24px; letter-spacing:-.03em; }
@@ -116,7 +116,7 @@ export default function SystemVisualizer() {
         .viz-live { display:flex; align-items:center; gap:7px; color:#34d399; font-size:12px; border:1px solid rgba(52,211,153,.3); padding:7px 10px; border-radius:999px; background:rgba(52,211,153,.08); }
         .viz-dot { width:7px; height:7px; border-radius:50%; background:#34d399; box-shadow:0 0 12px #34d399; animation:viz-pulse 1.3s infinite; }
         .viz-card { border:1px solid var(--border-subtle); background:rgba(18,20,30,.68); border-radius:18px; box-shadow:0 18px 70px rgba(0,0,0,.2); }
-        .viz-map { position:relative; min-height:470px; overflow:hidden; }
+        .viz-map { position:relative; min-height:470px; overflow:hidden; background:radial-gradient(circle at 52% 50%, rgba(139,92,246,.08), transparent 30%); }
         .viz-grid { position:absolute; inset:0; opacity:.2; background-image:linear-gradient(rgba(148,163,184,.16) 1px, transparent 1px),linear-gradient(90deg,rgba(148,163,184,.16) 1px,transparent 1px); background-size:42px 42px; }
         .viz-lines { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
         .viz-link { fill:none; stroke:var(--border); stroke-width:1.1; opacity:.65; vector-effect:non-scaling-stroke; }
@@ -130,7 +130,9 @@ export default function SystemVisualizer() {
         .viz-node-orb { width:48px; height:48px; margin:auto; display:flex; align-items:center; justify-content:center; border-radius:50%; color:var(--node-color); border:1px solid color-mix(in srgb, var(--node-color) 65%, transparent); background:color-mix(in srgb, var(--node-color) 13%, var(--bg-1)); }
         .viz-node-label { display:block; margin-top:8px; font-size:12px; color:var(--text-secondary); }
         .viz-node.active .viz-node-label { color:var(--text-primary); }
-        .viz-radar { position:absolute; width:240px; height:240px; border-radius:50%; border:1px solid rgba(139,92,246,.18); left:50%; top:50%; transform:translate(-50%,-50%); animation:viz-radar 4s ease-in-out infinite; }
+        .viz-radar { position:absolute; width:280px; height:280px; border-radius:50%; border:1px solid rgba(139,92,246,.18); left:52%; top:50%; transform:translate(-50%,-50%); animation:viz-radar 4s ease-in-out infinite; }
+        .viz-radar::before, .viz-radar::after { content:""; position:absolute; inset:24px; border:1px dashed rgba(6,182,212,.18); border-radius:50%; }
+        .viz-radar::after { inset:58px; border-color:rgba(20,184,166,.2); }
         .viz-bottom { display:grid; grid-template-columns:1.2fr .8fr; gap:16px; margin-top:16px; }
         .viz-panel { padding:16px; }
         .viz-panel h2 { font-size:13px; margin:0 0 12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-tertiary); }

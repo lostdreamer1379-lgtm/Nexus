@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from urllib.parse import parse_qs, quote_plus, unquote, urlparse
+from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 
 import httpx
 
@@ -60,7 +60,8 @@ class _SearchParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = dict(attrs)
-        if tag == "a" and "result__a" in (attrs_dict.get("class") or ""):
+        classes = set((attrs_dict.get("class") or "").split())
+        if tag == "a" and classes.intersection({"result__a", "result__url"}):
             self._in_result = True
             self._title = ""
             self._href = attrs_dict.get("href") or ""
@@ -85,7 +86,15 @@ async def search_web(query: str, limit: int = 3) -> list[WebResult]:
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True, headers=headers) as client:
         response = await client.get(search_url)
         response.raise_for_status()
-        candidates = _search_urls(response.text)[:limit]
+        candidates = []
+        seen_urls: set[str] = set()
+        for title, url in _search_urls(response.text):
+            url = urljoin("https://html.duckduckgo.com", url)
+            if url not in seen_urls:
+                seen_urls.add(url)
+                candidates.append((title, url))
+            if len(candidates) >= limit:
+                break
         results: list[WebResult] = []
         for title, url in candidates:
             try:
@@ -94,6 +103,6 @@ async def search_web(query: str, limit: int = 3) -> list[WebResult]:
                 content = _page_text(page.text)[:6000]
                 if content:
                     results.append(WebResult(title=title, url=url, content=content))
-            except httpx.HTTPError:
+            except (httpx.HTTPError, ValueError):
                 continue
     return results

@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import { api, streamChatCompletion, ApiError } from "../../api/client";
 import ModelSelector from "./ModelSelector.jsx";
 import KBSelector from "./KBSelector.jsx";
-import MessageList from "./MessageList.jsx";
 import Composer from "./Composer.jsx";
 import { estimateMessageTokens, formatTokenCount } from "../../utils/tokens.js";
 import { emitSystemEvent } from "../../utils/systemEvents.js";
@@ -14,16 +13,34 @@ import {
   markConversationComplete,
 } from "../../utils/backgroundTasks.js";
 
+const MessageList = lazy(() => import("./MessageList.jsx"));
+
+const CHAT_PREFERENCES_KEY = "nexus-chat-preferences";
+
+function readChatPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CHAT_PREFERENCES_KEY) || "{}");
+    return {
+      modelId: typeof saved.modelId === "string" ? saved.modelId : null,
+      webSearch: Boolean(saved.webSearch),
+      agentWorkflow: Boolean(saved.agentWorkflow),
+    };
+  } catch {
+    return { modelId: null, webSearch: false, agentWorkflow: false };
+  }
+}
+
 export default function ChatView({ onConversationChange }) {
   const { conversationId } = useParams();
   const navigate = useNavigate();
+  const initialPreferences = useRef(readChatPreferences());
 
   const [models, setModels] = useState([]);
-  const [selectedModelId, setSelectedModelId] = useState(null);
+  const [selectedModelId, setSelectedModelId] = useState(initialPreferences.current.modelId);
   const [knowledgeBases, setKnowledgeBases] = useState([]);
   const [selectedKbId, setSelectedKbId] = useState(null);
-  const [webSearch, setWebSearch] = useState(false);
-  const [agentWorkflow, setAgentWorkflow] = useState(false);
+  const [webSearch, setWebSearch] = useState(initialPreferences.current.webSearch);
+  const [agentWorkflow, setAgentWorkflow] = useState(initialPreferences.current.agentWorkflow);
   const [workflowStatus, setWorkflowStatus] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loadingConvo, setLoadingConvo] = useState(false);
@@ -31,8 +48,10 @@ export default function ChatView({ onConversationChange }) {
   const [streamError, setStreamError] = useState(null);
   const [memorySuggestions, setMemorySuggestions] = useState([]);
   const [savingMemory, setSavingMemory] = useState(null);
+  const [savedMemoryIds, setSavedMemoryIds] = useState(() => new Set());
   const [backgroundProcessing, setBackgroundProcessing] = useState(false);
   const abortRef = useRef(null);
+  const activeConversationIdRef = useRef(conversationId);
   const selectedModel = models.find((m) => m.id === selectedModelId);
   const usedTokens = estimateMessageTokens(messages);
   const contextLength = selectedModel?.context_length;
@@ -41,13 +60,32 @@ export default function ChatView({ onConversationChange }) {
   const toggleWebSearch = () => setWebSearch((value) => !value);
   const toggleAgentWorkflow = () => setAgentWorkflow((value) => !value);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        CHAT_PREFERENCES_KEY,
+        JSON.stringify({ modelId: selectedModelId, webSearch, agentWorkflow })
+      );
+    } catch {
+      // Preferences are optional; chat behavior must continue if storage is unavailable.
+    }
+  }, [selectedModelId, webSearch, agentWorkflow]);
+
+  useEffect(() => {
+    activeConversationIdRef.current = conversationId;
+    setSavedMemoryIds(new Set());
+  }, [conversationId]);
+
   // Load enabled models once
   useEffect(() => {
     api
       .get("/api/v1/models?enabled_only=true")
       .then((list) => {
         setModels(list);
-        setSelectedModelId((prev) => prev || list[0]?.id || null);
+        setSelectedModelId((prev) => {
+          if (prev && list.some((model) => model.id === prev)) return prev;
+          return list[0]?.id || null;
+        });
       })
       .catch(() => {});
   }, []);
@@ -153,6 +191,7 @@ export default function ChatView({ onConversationChange }) {
             if (event.rag_chunks?.length) emitTelemetry({ kind: "retrieval", node: "knowledge", title: "Knowledge retrieved", detail: `${event.rag_chunks.length} relevant chunks`, status: "complete" });
             if (event.web_sources?.length) emitTelemetry({ kind: "web", node: "web", title: "Web sources found", detail: `${event.web_sources.length} live sources`, status: "complete" });
             resolvedConversationId = event.conversation_id;
+            activeConversationIdRef.current = event.conversation_id;
             markConversationActive(event.conversation_id, {
               model: event.model_display_name,
               title: "Generating response",
@@ -233,6 +272,30 @@ export default function ChatView({ onConversationChange }) {
     if (!lastUser) return;
     setMessages((prev) => prev.slice(0, -1));
     await sendMessage(lastUser.content);
+  };
+
+  const saveMessageToMemory = async (message) => {
+    if (!message.content?.trim() || savedMemoryIds.has(message.id)) return;
+    setSavingMemory(message.id);
+    try {
+      await api.post("/api/v1/memories", {
+        content: message.content.trim(),
+        category: "fact",
+        source_conversation_id: activeConversationIdRef.current || conversationId || null,
+      });
+      setSavedMemoryIds((current) => new Set(current).add(message.id));
+      emitSystemEvent({
+        kind: "memory",
+        node: "memory",
+        title: "Message saved to memory",
+        detail: `${message.role === "user" ? "User message" : "Model response"} added to long-term memory`,
+        status: "complete",
+      });
+    } catch (err) {
+      setStreamError(err instanceof ApiError ? err.message : "Could not save this message to memory.");
+    } finally {
+      setSavingMemory(null);
+    }
   };
 
   const noModels = models.length === 0;
@@ -348,7 +411,16 @@ export default function ChatView({ onConversationChange }) {
             </p>
           </div>
         ) : (
-          <MessageList messages={messages} streaming={streaming} onRegenerate={regenerateLast} />
+          <Suspense fallback={<div className="chat-loading-messages"><div className="spinner" /></div>}>
+            <MessageList
+              messages={messages}
+              streaming={streaming}
+              onRegenerate={regenerateLast}
+              onSaveMemory={saveMessageToMemory}
+              savingMemory={savingMemory}
+              savedMemoryIds={savedMemoryIds}
+            />
+          </Suspense>
         )}
       </div>
 
