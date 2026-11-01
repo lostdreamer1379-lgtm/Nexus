@@ -5,16 +5,50 @@ import { createPortal } from "react-dom";
 
 export default function ModelSelector({ models, selectedModelId, onSelect }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [menuStyle, setMenuStyle] = useState({});
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
   const selected = models.find((m) => m.id === selectedModelId);
 
   useEffect(() => {
     const onClick = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target) &&
+        menuRef.current &&
+        !menuRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  const positionMenu = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const mobile = window.innerWidth <= 860;
+    setMenuStyle(mobile
+      ? {
+          position: "fixed",
+          top: `${Math.min(rect.bottom + 8, window.innerHeight - 380)}px`,
+          left: "12px",
+          right: "12px",
+          width: "auto",
+        }
+      : {
+          position: "fixed",
+          top: `${rect.bottom + 6}px`,
+          left: `${rect.left}px`,
+          width: "300px",
+        });
+  };
+
+  const toggleMenu = () => {
+    if (!open) positionMenu();
+    setOpen((value) => !value);
+  };
 
   if (models.length === 0) {
     return (
@@ -25,7 +59,7 @@ export default function ModelSelector({ models, selectedModelId, onSelect }) {
   }
 
   return (
-    <div className="model-selector" ref={ref}>
+    <div className="model-selector">
       <style>{`
         .model-selector { position: relative; }
         .ms-trigger {
@@ -58,14 +92,14 @@ export default function ModelSelector({ models, selectedModelId, onSelect }) {
         @keyframes menu-in { from { opacity: 0; transform: translateY(-5px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
       `}</style>
 
-      <button type="button" className="ms-trigger" onClick={() => setOpen((v) => !v)}>
+      <button ref={triggerRef} type="button" className="ms-trigger" onClick={toggleMenu}>
         {selected?.pricing_tier === "free" && <Zap size={14} color="var(--success)" />}
         {selected?.display_name || "Select a model"}
         <ChevronDown size={15} />
       </button>
 
       {open && createPortal(
-        <div className="ms-menu">
+        <div ref={menuRef} className="ms-menu" style={menuStyle}>
           {models.map((m) => (
             <div
               key={m.id}
