@@ -75,6 +75,19 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             return ProviderError("The provider is currently unavailable.", status="provider_unavailable")
         return ProviderError(f"Provider returned HTTP {resp.status_code}.", status="provider_unavailable")
 
+    @staticmethod
+    def _response_detail(resp: httpx.Response) -> str | None:
+        try:
+            data = resp.json()
+        except ValueError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        error = data.get("error")
+        if isinstance(error, dict):
+            return error.get("message") or error.get("detail")
+        return data.get("detail") or data.get("message")
+
     async def test_connection(self) -> bool:
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
@@ -137,9 +150,16 @@ class OpenAICompatibleAdapter(ProviderAdapter):
                         body = await resp.aread()
                         try:
                             detail = json.loads(body).get("error", {}).get("message")
-                        except Exception:
+                        except (TypeError, ValueError, AttributeError):
                             detail = None
                         err = self._map_http_error(resp)
+                        detail = detail or self._response_detail(resp)
+                        if resp.status_code == 404:
+                            detail = (
+                                detail
+                                or f"Endpoint or model was not found at {self._chat_url()}. "
+                                "Check the provider base URL and exact model ID."
+                            )
                         yield ChatChunk(error=detail or err.message, done=True)
                         return
 
