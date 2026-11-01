@@ -39,6 +39,12 @@ export default function ModelSelector({ models, selectedModelId, onSelect }) {
           background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-md);
           padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,0.35);
         }
+        @media (max-width: 860px) {
+          .ms-menu {
+            position: fixed; top: 104px; left: 12px; right: 12px; width: auto;
+            max-height: min(360px, calc(100dvh - 120px)); z-index: 300;
+          }
+        }
         .ms-item {
           display: flex; align-items: center; justify-content: space-between; gap: 8px;
           padding: 9px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13.5px;
@@ -49,7 +55,7 @@ export default function ModelSelector({ models, selectedModelId, onSelect }) {
         .ms-item-meta { font-size: 11.5px; color: var(--text-tertiary); }
       `}</style>
 
-      <button className="ms-trigger" onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="ms-trigger" onClick={() => setOpen((v) => !v)}>
         {selected?.pricing_tier === "free" && <Zap size={14} color="var(--success)" />}
         {selected?.display_name || "Select a model"}
         <ChevronDown size={15} />

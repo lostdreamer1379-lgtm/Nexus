@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
 import ChatView from "../Chat/ChatView.jsx";
@@ -13,15 +13,33 @@ import { applyTheme } from "../../utils/theme.js";
 
 export default function AppShell() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const touchStart = useRef(null);
   const [conversationsVersion, setConversationsVersion] = useState(0);
   const bumpConversations = () => setConversationsVersion((v) => v + 1);
+
+  const onTouchStart = (event) => {
+    const touch = event.touches[0];
+    touchStart.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const onTouchEnd = (event) => {
+    if (!touchStart.current) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - touchStart.current.x;
+    const dy = touch.clientY - touchStart.current.y;
+    const fromEdge = touchStart.current.x <= 32;
+    touchStart.current = null;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+    if (!mobileSidebarOpen && fromEdge && dx > 0) setMobileSidebarOpen(true);
+    if (mobileSidebarOpen && dx < 0) setMobileSidebarOpen(false);
+  };
 
   useEffect(() => {
     api.get("/api/v1/settings").then((prefs) => applyTheme(prefs.theme));
   }, []);
 
   return (
-    <div className="shell">
+    <div className="shell" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <style>{`
         .shell {
           height: 100vh;

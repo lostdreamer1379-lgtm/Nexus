@@ -35,6 +35,12 @@ export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
           border-radius: var(--radius-md); padding: 6px;
           box-shadow: 0 12px 32px rgba(0,0,0,0.35);
         }
+        @media (max-width: 860px) {
+          .kb-menu {
+            position: fixed; top: 104px; left: 12px; right: 12px; width: auto;
+            max-height: min(300px, calc(100dvh - 120px)); z-index: 300;
+          }
+        }
         .kb-item {
           display: flex; align-items: center; justify-content: space-between;
           gap: 8px; padding: 9px 10px; border-radius: var(--radius-sm);
@@ -50,6 +56,7 @@ export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
 
       <button
         className={`kb-trigger ${selected ? "active" : ""}`}
+        type="button"
         onClick={() => setOpen((v) => !v)}
         title={selected ? `Knowledge base: ${selected.name}` : "Add knowledge base context"}
       >

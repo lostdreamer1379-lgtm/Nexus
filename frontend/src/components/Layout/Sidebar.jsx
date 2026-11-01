@@ -226,7 +226,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
               transition: transform 0.18s ease;
               box-shadow: 0 0 0 rgba(0,0,0,0);
             }
-            .sidebar-open { transform: translateX(0); box-shadow: 20px 0 40px rgba(0,0,0,0.3); overflow-y: auto; }
+            .sidebar-open { transform: translateX(0); box-shadow: 20px 0 40px rgba(0,0,0,0.3); overflow-y: auto; touch-action: pan-y; }
             .sidebar-backdrop {
               display: block;
               position: fixed;
