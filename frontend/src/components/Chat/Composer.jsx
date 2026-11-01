@@ -33,6 +33,9 @@ export default function Composer({ onSend, onStop, streaming, disabled }) {
           padding: var(--space-4) var(--space-5);
           padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
           border-top: 1px solid var(--border-subtle);
+          flex-shrink: 0;
+          z-index: 100;
+          background: var(--bg-1);
         }
         .composer-inner {
           max-width: 760px; margin: 0 auto;
@@ -51,7 +54,11 @@ export default function Composer({ onSend, onStop, streaming, disabled }) {
           display: flex; align-items: center; justify-content: center;
           width: 34px; height: 34px; border-radius: var(--radius-md); border: none; cursor: pointer;
           background: var(--accent); color: var(--accent-text-on); flex-shrink: 0;
+          transition: transform .12s ease, background-color .18s ease, box-shadow .18s ease;
+          box-shadow: 0 5px 16px color-mix(in srgb, var(--accent) 22%, transparent);
         }
+        .composer-send:not(:disabled):active { transform: scale(.92); }
+        .composer-send:not(:disabled):hover { background: var(--accent-hover); }
         .composer-send:disabled { background: var(--bg-3); color: var(--text-tertiary); cursor: not-allowed; }
         .composer-hint { text-align: center; font-size: 11.5px; color: var(--text-tertiary); margin-top: 8px; }
       `}</style>

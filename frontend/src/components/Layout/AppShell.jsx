@@ -38,12 +38,29 @@ export default function AppShell() {
     api.get("/api/v1/settings").then((prefs) => applyTheme(prefs.theme));
   }, []);
 
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const updateViewportHeight = () => {
+      const height = viewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty("--app-height", `${height}px`);
+    };
+    updateViewportHeight();
+    window.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("scroll", updateViewportHeight);
+    return () => {
+      window.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("scroll", updateViewportHeight);
+    };
+  }, []);
+
   return (
     <div className="shell" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <style>{`
         .shell {
-          height: 100vh;
-          height: 100dvh;
+          height: var(--app-height, 100dvh);
+          min-height: var(--app-height, 100dvh);
           display: flex;
           background: var(--bg-0);
         }
@@ -52,6 +69,7 @@ export default function AppShell() {
           min-width: 0;
           display: flex;
           flex-direction: column;
+          min-height: 0;
         }
         .mobile-topbar {
           display: none;

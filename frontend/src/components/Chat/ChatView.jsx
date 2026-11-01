@@ -227,12 +227,12 @@ export default function ChatView({ onConversationChange }) {
   return (
     <div className="chat-view">
       <style>{`
-        .chat-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+        .chat-view { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
         .chat-header {
           display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
           padding: var(--space-3) var(--space-5);
           border-bottom: 1px solid var(--border-subtle);
-          position: sticky; top: 0; z-index: 80;
+          position: sticky; top: 0; z-index: 80; flex-shrink: 0;
           background: color-mix(in srgb, var(--bg-1) 94%, transparent);
           backdrop-filter: blur(14px);
         }
@@ -253,11 +253,12 @@ export default function ChatView({ onConversationChange }) {
         .web-toggle:hover, .web-toggle.active {
           border-color: var(--accent); color: var(--accent); background: var(--accent-dim);
         }
-        .chat-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+        .chat-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
         @media (max-width: 860px) {
           .chat-header {
             flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
             padding: 8px 12px; touch-action: pan-x;
+            position: relative; z-index: 120;
           }
           .chat-header::-webkit-scrollbar { display: none; }
           .chat-header-divider { height: 24px; }

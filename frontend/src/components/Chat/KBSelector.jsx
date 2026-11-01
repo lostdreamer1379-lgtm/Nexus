@@ -34,7 +34,8 @@ export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
           width: 260px; max-height: 300px; overflow-y: auto;
           background: var(--bg-2); border: 1px solid var(--border);
           border-radius: var(--radius-md); padding: 6px;
-          box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+          box-shadow: 0 18px 45px rgba(0,0,0,0.42);
+          animation: menu-in .16s ease-out;
         }
         @media (max-width: 860px) {
           .kb-menu {
@@ -44,7 +45,7 @@ export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
         }
         .kb-item {
           display: flex; align-items: center; justify-content: space-between;
-          gap: 8px; padding: 9px 10px; border-radius: var(--radius-sm);
+          gap: 8px; min-height: 44px; padding: 9px 10px; border-radius: var(--radius-sm);
           cursor: pointer; font-size: 13.5px;
         }
         .kb-item:hover { background: var(--bg-3); }
@@ -53,6 +54,7 @@ export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
         .kb-item-meta { font-size: 11.5px; color: var(--text-tertiary); margin-top: 1px; }
         .kb-none { padding: 9px 10px; font-size: 13.5px; color: var(--text-tertiary); }
         .kb-divider { border: none; border-top: 1px solid var(--border-subtle); margin: 4px 0; }
+        @keyframes menu-in { from { opacity: 0; transform: translateY(-5px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
       `}</style>
 
       <button
