@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Info } from "lucide-react";
 import { api, ApiError } from "../../api/client";
 
 const COMMON_EMBEDDING_MODELS = [
-  { id: "text-embedding-3-small", label: "OpenAI text-embedding-3-small (recommended)" },
-  { id: "text-embedding-3-large", label: "OpenAI text-embedding-3-large" },
-  { id: "text-embedding-ada-002", label: "OpenAI text-embedding-ada-002 (legacy)" },
-  { id: "nvidia/nv-embedqa-e5-v5", label: "NVIDIA NV-EmbedQA-E5-v5" },
-  { id: "custom", label: "Enter a custom model ID" },
+  { id: "text-embedding-3-small", label: "OpenAI text-embedding-3-small (recommended)", providers: ["openai"] },
+  { id: "text-embedding-3-large", label: "OpenAI text-embedding-3-large", providers: ["openai"] },
+  { id: "text-embedding-ada-002", label: "OpenAI text-embedding-ada-002 (legacy)", providers: ["openai"] },
+  { id: "nvidia/nv-embedqa-e5-v5", label: "NVIDIA NV-EmbedQA-E5-v5", providers: ["nvidia"] },
+  { id: "text-embedding-004", label: "Google text-embedding-004", providers: ["gemini"] },
+  { id: "custom", label: "Enter a custom model ID", providers: ["openrouter", "openai", "nvidia", "gemini", "anthropic", "custom"] },
 ];
 
 export default function CreateKBModal({ onClose, onCreated }) {
@@ -24,13 +25,35 @@ export default function CreateKBModal({ onClose, onCreated }) {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const selectedConnection = connections.find((connection) => connection.id === connectionId);
+  const embeddingModels = useMemo(() => {
+    const providerType = selectedConnection?.provider_type;
+    return COMMON_EMBEDDING_MODELS.filter((model) => model.providers.includes(providerType));
+  }, [selectedConnection]);
+
   useEffect(() => {
     api.get("/api/v1/providers/connections").then((list) => {
       const connected = list.filter((c) => c.connection_status === "connected");
       setConnections(connected);
-      if (connected.length > 0) setConnectionId(connected[0].id);
+      if (connected.length > 0) {
+        setConnectionId(connected[0].id);
+        setEmbeddingModelChoice(
+          COMMON_EMBEDDING_MODELS.find((model) => model.providers.includes(connected[0].provider_type))?.id || "custom"
+        );
+      }
     });
   }, []);
+
+  useEffect(() => {
+    if (embeddingModels.length === 0) {
+      setEmbeddingModelChoice("custom");
+      return;
+    }
+    if (!embeddingModels.some((model) => model.id === embeddingModelChoice)) {
+      setEmbeddingModelChoice(embeddingModels[0].id);
+      setCustomModelId("");
+    }
+  }, [embeddingModels, embeddingModelChoice]);
 
   const effectiveModelId =
     embeddingModelChoice === "custom" ? customModelId.trim() : embeddingModelChoice;
@@ -125,11 +148,14 @@ export default function CreateKBModal({ onClose, onCreated }) {
             <select
               className="input"
               value={embeddingModelChoice}
-              onChange={(e) => setEmbeddingModelChoice(e.target.value)}
+              onChange={(e) => {
+                setEmbeddingModelChoice(e.target.value);
+                if (e.target.value !== "custom") setCustomModelId("");
+              }}
             >
-              {COMMON_EMBEDDING_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
+            {embeddingModels.map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
             </select>
             {embeddingModelChoice === "custom" && (
               <input
