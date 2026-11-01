@@ -38,6 +38,8 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
 
   useEffect(() => {
     loadConversations();
+    window.addEventListener("nexus-conversations-changed", loadConversations);
+    return () => window.removeEventListener("nexus-conversations-changed", loadConversations);
   }, [conversationsVersion]);
 
   const filtered = conversations.filter((c) => c.title.toLowerCase().includes(query.toLowerCase()));

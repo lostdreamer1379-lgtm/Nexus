@@ -125,6 +125,13 @@ def update_memory(
     return _out(row)
 
 
+@router.delete("")
+def clear_memories(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    deleted = db.query(UserMemory).filter(UserMemory.user_id == current_user.id).delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": deleted}
+
+
 def _out(row: UserMemory):
     return {
         "id": row.id,

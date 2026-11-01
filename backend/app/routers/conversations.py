@@ -64,3 +64,10 @@ def delete_conversation(conversation_id: str, current_user: User = Depends(get_c
     db.delete(convo)
     db.commit()
     return None
+
+
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+def clear_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db.query(Conversation).filter(Conversation.user_id == current_user.id).delete(synchronize_session=False)
+    db.commit()
+    return None

@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { api } from "../../api/client";
 import { applyTheme } from "../../utils/theme.js";
 import { emitSystemEvent } from "../../utils/systemEvents.js";
 
 export default function SettingsPanel() {
-  const { user } = useAuth();
+  const { user, logout, deleteAccount } = useAuth();
+  const navigate = useNavigate();
   const [prefs, setPrefs] = useState(null);
   const [models, setModels] = useState([]);
   const [saved, setSaved] = useState(false);
   const [memories, setMemories] = useState([]);
   const [refiningMemories, setRefiningMemories] = useState(false);
+  const [actionMessage, setActionMessage] = useState(null);
+  const [actionError, setActionError] = useState(null);
 
   useEffect(() => {
     Promise.all([api.get("/api/v1/settings"), api.get("/api/v1/models?enabled_only=true")]).then(([p, m]) => {
@@ -47,6 +51,58 @@ export default function SettingsPanel() {
     setMemories((current) => current.map((item) => item.id === updated.id ? updated : item));
   };
 
+  const clearCache = async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    if ("caches" in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((name) => caches.delete(name)));
+    }
+    setActionMessage("Local cache cleared.");
+    setActionError(null);
+  };
+
+  const clearChats = async () => {
+    if (!window.confirm("Clear all conversations? This cannot be undone.")) return;
+    try {
+      await api.delete("/api/v1/conversations");
+      window.dispatchEvent(new Event("nexus-conversations-changed"));
+      setActionMessage("All conversations cleared.");
+      setActionError(null);
+    } catch (err) {
+      setActionError(err.message || "Could not clear conversations.");
+    }
+  };
+
+  const clearMemories = async () => {
+    if (!window.confirm("Clear all saved memories? This cannot be undone.")) return;
+    try {
+      await api.delete("/api/v1/memories");
+      setMemories([]);
+      setActionMessage("All memories cleared.");
+      setActionError(null);
+    } catch (err) {
+      setActionError(err.message || "Could not clear memories.");
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("Delete your account and all data permanently? This cannot be undone.")) return;
+    try {
+      await deleteAccount();
+      localStorage.clear();
+      sessionStorage.clear();
+      navigate("/login", { replace: true });
+    } catch (err) {
+      setActionError(err.message || "Could not delete the account.");
+    }
+  };
+
   if (!prefs) return null;
 
   return (
@@ -78,6 +134,19 @@ export default function SettingsPanel() {
               <option value="dark">Dark</option>
               <option value="amoled">AMOLED black</option>
             </select>
+          </div>
+
+          <div className="settings-section card">
+            <h2>Data and session</h2>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
+              <button className="btn btn-ghost" onClick={clearCache}>Clear cache</button>
+              <button className="btn btn-ghost" onClick={clearChats}>Clear chats</button>
+              <button className="btn btn-ghost" onClick={clearMemories}>Clear memories</button>
+              <button className="btn btn-ghost" onClick={handleLogout}>Log out</button>
+            </div>
+            <button className="btn" style={{ marginTop: "var(--space-3)", color: "var(--danger)" }} onClick={handleDeleteAccount}>
+              Delete account
+            </button>
           </div>
         </div>
 
@@ -137,6 +206,8 @@ export default function SettingsPanel() {
         </div>
 
         {saved && <p className="saved-pill">Saved</p>}
+        {actionMessage && <p className="saved-pill">{actionMessage}</p>}
+        {actionError && <p className="error-text">{actionError}</p>}
       </div>
     </div>
   );

@@ -4,7 +4,16 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import User, UserPreference
+from app.models import (
+    Conversation,
+    EncryptedCredential,
+    KnowledgeBase,
+    ProviderConnection,
+    User,
+    UserMemory,
+    UserModel,
+    UserPreference,
+)
 from app.schemas import LoginRequest, RegisterRequest, UserOut
 from app.security import create_access_token, hash_password, verify_password
 
@@ -58,6 +67,40 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(response: Response):
+    response.delete_cookie(settings.SESSION_COOKIE_NAME, path="/")
+    return None
+
+
+@router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Permanently remove the authenticated user's account and owned data."""
+    db.query(UserMemory).filter(UserMemory.user_id == current_user.id).delete(synchronize_session=False)
+    db.query(Conversation).filter(Conversation.user_id == current_user.id).delete(synchronize_session=False)
+    db.query(KnowledgeBase).filter(KnowledgeBase.user_id == current_user.id).delete(synchronize_session=False)
+    db.query(UserModel).filter(UserModel.user_id == current_user.id).delete(synchronize_session=False)
+
+    connection_ids = [
+        row[0]
+        for row in db.query(ProviderConnection.id)
+        .filter(ProviderConnection.user_id == current_user.id)
+        .all()
+    ]
+    if connection_ids:
+        db.query(EncryptedCredential).filter(
+            EncryptedCredential.connection_id.in_(connection_ids)
+        ).delete(synchronize_session=False)
+    db.query(ProviderConnection).filter(ProviderConnection.user_id == current_user.id).delete(
+        synchronize_session=False
+    )
+    db.query(UserPreference).filter(UserPreference.user_id == current_user.id).delete(
+        synchronize_session=False
+    )
+    db.delete(current_user)
+    db.commit()
     response.delete_cookie(settings.SESSION_COOKIE_NAME, path="/")
     return None
 
