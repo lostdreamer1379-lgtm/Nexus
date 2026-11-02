@@ -52,6 +52,8 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
   const [uploadError, setUploadError] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [models, setModels] = useState([]);
+  const [usableModels, setUsableModels] = useState([]);
+  const [checkingChatModels, setCheckingChatModels] = useState(false);
   const [connections, setConnections] = useState([]);
   const [embeddingConnectionId, setEmbeddingConnectionId] = useState(kb.embedding_connection_id || "");
   const [embeddingModelChoice, setEmbeddingModelChoice] = useState(kb.embedding_model_id);
@@ -96,7 +98,19 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
   useEffect(() => {
     api.get("/api/v1/models?enabled_only=true").then((list) => {
       setModels(list);
-      setCompareModel((current) => current || list[0]?.id || "");
+      setCheckingChatModels(true);
+      Promise.all(list.map(async (model) => {
+        try {
+          const result = await api.post(`/api/v1/providers/connections/${model.connection_id}/chat-models/${model.id}/check`);
+          return result.usable ? model : null;
+        } catch {
+          return null;
+        }
+      })).then((checked) => {
+        const usable = checked.filter(Boolean);
+        setUsableModels(usable);
+        setCompareModel((current) => usable.some((model) => model.id === current) ? current : usable[0]?.id || "");
+      }).finally(() => setCheckingChatModels(false));
     }).catch(() => {});
   }, []);
 
@@ -412,8 +426,8 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
               <strong>Fact refinement</strong>
             </div>
             <p className="field-hint">Find explicit facts, flag contradictory values, and review them before use.</p>
-            <button className="btn" onClick={refineFacts} disabled={factsBuilding || !compareModel || !documents.some((doc) => doc.status === "ready")}>
-              {factsBuilding ? "Refining facts…" : "Refine knowledge-base facts"}
+            <button className="btn" onClick={refineFacts} disabled={factsBuilding || checkingChatModels || !compareModel || !documents.some((doc) => doc.status === "ready")}>
+              {factsBuilding ? "Refining facts…" : checkingChatModels ? "Checking model access…" : "Refine knowledge-base facts"}
             </button>
             {factsError && <p className="error-text">{factsError}</p>}
             {facts.slice(0, 30).map((fact) => (
@@ -499,7 +513,8 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
             </select>
             <select className="input" value={compareModel} onChange={(e) => setCompareModel(e.target.value)}>
               <option value="">Comparison model</option>
-              {models.map((model) => <option key={model.id} value={model.id}>{model.display_name}</option>)}
+              {checkingChatModels && <option value="">Checking model access…</option>}
+              {usableModels.map((model) => <option key={model.id} value={model.id}>{model.display_name}</option>)}
             </select>
           </div>
           <button

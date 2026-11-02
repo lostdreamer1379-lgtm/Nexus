@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import EncryptedCredential, ProviderConnection, User, UserModel
-from app.providers.base import ProviderError
+from app.providers.base import ChatMessage, ProviderError
 from app.providers.custom import validate_custom_base_url
 from app.providers.registry import SUPPORTED_PROVIDER_TYPES, build_adapter, build_adapter_from_key
 from app.rag.embeddings import EmbeddingError, embed_texts
@@ -47,6 +47,11 @@ class EmbeddingModelCheckResult(BaseModel):
 
 class EmbeddingModelCheckRequest(BaseModel):
     custom_model_id: str | None = None
+
+
+class ChatModelCheckResult(BaseModel):
+    usable: bool
+    message: str
 
 
 COMMON_EMBEDDING_CANDIDATES = {
@@ -364,3 +369,34 @@ async def check_embedding_models(
         failed=failed,
         message=message,
     )
+
+
+@router.post("/connections/{connection_id}/chat-models/{model_id}/check", response_model=ChatModelCheckResult)
+async def check_chat_model(
+    connection_id: str,
+    model_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    conn = _get_owned_connection(db, connection_id, current_user)
+    model = db.get(UserModel, model_id)
+    if not model or model.user_id != current_user.id or model.connection_id != conn.id or not model.enabled:
+        raise HTTPException(status_code=404, detail="Enabled model not found")
+    try:
+        adapter = build_adapter(conn)
+        parts: list[str] = []
+        async for chunk in adapter.stream_chat(
+            model.provider_model_id,
+            [ChatMessage(role="user", content="Reply with the single word OK.")],
+        ):
+            if chunk.error:
+                return ChatModelCheckResult(usable=False, message=chunk.error)
+            if chunk.delta:
+                parts.append(chunk.delta)
+            if chunk.done:
+                break
+        if "".join(parts).strip():
+            return ChatModelCheckResult(usable=True, message="Model completed a live chat capability check.")
+        return ChatModelCheckResult(usable=False, message="Model returned no usable text.")
+    except ProviderError as exc:
+        return ChatModelCheckResult(usable=False, message=exc.message)
