@@ -59,7 +59,10 @@ ARTIFACT_COMMANDS = {
     "photo": re.compile(r"^\s*/photo(?:\s+|$)", re.IGNORECASE),
     "video": re.compile(r"^\s*/video(?:\s+|$)", re.IGNORECASE),
 }
-GENERATED_FILE_HEADER = re.compile(r"^\s*(?:===\s*)?FILE\s*:\s*(.+?)\s*(?:===)?\s*$", re.IGNORECASE)
+GENERATED_FILE_HEADER = re.compile(
+    r"^\s*(?:```(?:text|markdown)?\s*)?(?:===\s*)?FILE\s*:\s*(.+?)\s*(?:===)?\s*``?\s*$",
+    re.IGNORECASE,
+)
 GENERATED_FILE_END = re.compile(r"^\s*(?:===\s*)?END\s+FILE\s*(?:===)?\s*$", re.IGNORECASE)
 
 RESPONSE_FORMAT_SYSTEM_PROMPT = """\
@@ -169,6 +172,28 @@ def _parse_generated_files(text: str) -> dict[str, str]:
     return files
 
 
+def _parse_fenced_generated_files(text: str) -> dict[str, str]:
+    """Recover files from the common `path` + fenced-code format."""
+    files: dict[str, str] = {}
+    pattern = re.compile(
+        r"(?ms)^\s*(?:###\s*)?(?:FILE\s*:\s*)?`?([^\n`]+?)`?\s*\n"
+        r"\s*```[^\n]*\n(.*?)^\s*```\s*$"
+    )
+    for match in pattern.finditer(text):
+        path = match.group(1).strip().strip("`").rstrip(":")
+        content = match.group(2).strip()
+        if path and ("/" in path or "\\" in path or "." in Path(path).name):
+            files[path] = content + "\n"
+    return files
+
+
+def _parse_generated_project(text: str) -> dict[str, str]:
+    files = _parse_generated_files(text)
+    if files:
+        return files
+    return _parse_fenced_generated_files(text)
+
+
 def _create_generated_project_zip(files: dict[str, str]) -> str:
     token = uuid.uuid4().hex
     archive = ARTIFACT_ROOT / f"{token}.zip"
@@ -228,7 +253,7 @@ async def chat_completions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    artifact_kind, _ = _artifact_command(payload.message)
+    artifact_kind, artifact_request = _artifact_command(payload.message)
     # --- Resolve the model and verify ownership + enabled status ---
     model = db.get(UserModel, payload.model_id)
     if not model or model.user_id != current_user.id:
@@ -416,7 +441,19 @@ async def chat_completions(
                 generated_parts: list[str] = []
                 generation_messages = [
                     *chat_messages,
-                    ChatMessage(role="user", content=payload.message),
+                    ChatMessage(
+                        role="user",
+                        content=(
+                            "Generate the requested project now. Output only the project files, using "
+                            "one block per file in this exact format:\n\n"
+                            "FILE: path/to/file.ext\n"
+                            "complete file contents\n"
+                            "END FILE\n\n"
+                            f"Project request: {artifact_request or payload.message}\n"
+                            "Do not answer conversationally, do not use Markdown fences, and do not "
+                            "summarize instead of returning files."
+                        ),
+                    ),
                 ]
                 async for chunk in adapter.stream_chat(provider_model_id, generation_messages):
                     if chunk.error:
@@ -430,7 +467,7 @@ async def chat_completions(
                     if chunk.done:
                         break
                 generated_text = "".join(generated_parts)
-                generated_files = _parse_generated_files(generated_text)
+                generated_files = _parse_generated_project(generated_text)
                 if not generated_files:
                     error_text = "The model did not return files in the required project format."
                     yield _sse({"type": "error", "message": error_text})
