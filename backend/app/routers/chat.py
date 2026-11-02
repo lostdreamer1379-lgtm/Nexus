@@ -150,26 +150,52 @@ def _create_project_zip() -> tuple[str, str]:
 
 def _parse_generated_files(text: str) -> dict[str, str]:
     files: dict[str, str] = {}
-    current_path: str | None = None
-    current_lines: list[str] = []
-    for line in text.splitlines():
-        header = GENERATED_FILE_HEADER.match(line)
-        if header:
-            if current_path:
-                files[current_path] = "\n".join(current_lines).strip() + "\n"
-            current_path = header.group(1).strip().strip("`")
-            current_lines = []
+    markers = list(re.finditer(r"(?im)^\s*FILE\s*:\s*", text))
+    for index, marker in enumerate(markers):
+        block_start = marker.end()
+        block_end = text.find("END FILE", block_start)
+        if block_end < 0:
+            block_end = markers[index + 1].start() if index + 1 < len(markers) else len(text)
+        block = text[block_start:block_end].strip()
+        if not block:
             continue
-        if current_path and GENERATED_FILE_END.match(line):
-            files[current_path] = "\n".join(current_lines).strip() + "\n"
-            current_path = None
-            current_lines = []
-            continue
-        if current_path:
-            current_lines.append(line)
-    if current_path:
-        files[current_path] = "\n".join(current_lines).strip() + "\n"
+
+        first_line, separator, remainder = block.partition("\n")
+        if separator:
+            path = first_line.strip().strip("`")
+            content = remainder
+        else:
+            # Recover collapsed output such as:
+            # FILE: requirements.txt Flask==3.0.3 END FILE
+            match = re.match(r"([^\s`]+(?:\.[A-Za-z0-9_-]+))\s+([\s\S]+)", block)
+            if not match:
+                continue
+            path, content = match.groups()
+
+        path = path.strip().strip("`").rstrip(":")
+        if path and ("/" in path or "\\" in path or "." in Path(path).name):
+            files[path] = content.strip() + "\n"
     return files
+
+
+def _format_generated_files(files: dict[str, str]) -> str:
+    sections = ["## Generated project files"]
+    for path, content in files.items():
+        suffix = Path(path).suffix.lower()
+        language = {
+            ".py": "python", ".js": "javascript", ".jsx": "jsx", ".ts": "typescript",
+            ".tsx": "tsx", ".html": "html", ".css": "css", ".json": "json",
+            ".md": "markdown", ".yml": "yaml", ".yaml": "yaml", ".sh": "bash",
+        }.get(suffix, "")
+        sections.append(f"### `{path}`\n\n```{language}\n{content.rstrip()}\n```")
+    return "\n\n".join(sections)
+
+
+def _create_readme_artifact(content: str) -> str:
+    token = uuid.uuid4().hex
+    path = ARTIFACT_ROOT / f"{token}.md"
+    path.write_text(content, encoding="utf-8")
+    return path.name
 
 
 def _parse_fenced_generated_files(text: str) -> dict[str, str]:
@@ -213,11 +239,13 @@ def download_artifact(
     artifact_name: str,
     current_user: User = Depends(get_current_user),
 ):
-    if not re.fullmatch(r"[a-f0-9]{32}\.zip", artifact_name):
+    if not re.fullmatch(r"[a-f0-9]{32}\.(?:zip|md)", artifact_name):
         raise HTTPException(status_code=404, detail="Artifact not found")
     path = ARTIFACT_ROOT / artifact_name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Artifact expired or not found")
+    if path.suffix == ".md":
+        return FileResponse(path, media_type="text/markdown", filename="README.md")
     return FileResponse(path, media_type="application/zip", filename="nexus-ai-project.zip")
 
 
@@ -462,8 +490,6 @@ async def chat_completions(
                         break
                     if chunk.delta:
                         generated_parts.append(chunk.delta)
-                        assembled += chunk.delta
-                        yield _sse({"type": "delta", "content": chunk.delta})
                     if chunk.done:
                         break
                 generated_text = "".join(generated_parts)
@@ -472,12 +498,19 @@ async def chat_completions(
                     error_text = "The model did not return files in the required project format."
                     yield _sse({"type": "error", "message": error_text})
                 else:
+                    formatted_files = _format_generated_files(generated_files)
+                    readme_name = await asyncio.to_thread(
+                        _create_readme_artifact,
+                        formatted_files,
+                    )
                     yield _sse({"type": "artifact_status", "kind": "zip", "status": "building", "detail": f"Packaging {len(generated_files)} generated files…"})
                     artifact_name = await asyncio.to_thread(_create_generated_project_zip, generated_files)
                     download_path = f"/api/v1/chat/artifacts/{artifact_name}"
+                    readme_path = f"/api/v1/chat/artifacts/{readme_name}"
                     download_message = (
-                        f"\n\nGenerated {len(generated_files)} project files. "
-                        f"[Download generated project ZIP]({download_path})"
+                        f"{formatted_files}\n\nGenerated {len(generated_files)} project files.\n\n"
+                        f"[Download generated project ZIP]({download_path}) · "
+                        f"[Download README.md]({readme_path})"
                     )
                     assembled += download_message
                     yield _sse({"type": "delta", "content": download_message})
@@ -486,6 +519,12 @@ async def chat_completions(
                         "kind": "zip",
                         "name": "generated-project.zip",
                         "download_url": download_path,
+                    })
+                    yield _sse({
+                        "type": "artifact",
+                        "kind": "readme",
+                        "name": "README.md",
+                        "download_url": readme_path,
                     })
             elif artifact_kind in {"photo", "video"}:
                 assembled = (

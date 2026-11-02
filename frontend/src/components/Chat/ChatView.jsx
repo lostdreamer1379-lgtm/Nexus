@@ -301,7 +301,10 @@ export default function ChatView({ onConversationChange }) {
               setMessages((prev) => {
                 const next = [...prev];
                 const last = next[next.length - 1];
-                if (last?.role === "assistant") next[next.length - 1] = { ...last, artifact };
+                if (last?.role === "assistant") {
+                  const artifacts = [...(last.artifacts || (last.artifact ? [last.artifact] : [])), artifact];
+                  next[next.length - 1] = { ...last, artifacts, artifact: artifacts[0] };
+                }
                 return next;
               });
             }

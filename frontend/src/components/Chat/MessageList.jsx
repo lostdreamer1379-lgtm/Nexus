@@ -267,6 +267,7 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
         <div key={m.id} className={`msg-row ${m.role}`}>
           {(() => {
             const artifact = m.artifact || persistedArtifact(m.content);
+            const artifacts = m.artifacts || (artifact ? [artifact] : []);
                       const renderedContent = m.content?.replace(/\n*\[Download (?:project|generated project) ZIP\]\([^)]+\)/i, "") || "";
             return (
               <>
@@ -301,11 +302,11 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
           {m.role === "assistant" && m.web_sources?.length > 0 && (
             <WebSources sources={m.web_sources} />
           )}
-          {m.role === "assistant" && artifact?.download_url && (
-            <a className="artifact-download" href={artifact.download_url} download={artifact.name || "download"}>
-              <Download size={14} /> Download {artifact.name || "artifact"}
+          {m.role === "assistant" && artifacts.map((item, index) => item?.download_url && (
+            <a className="artifact-download" key={`${item.download_url}-${index}`} href={item.download_url} download={item.name || "download"}>
+              <Download size={14} /> Download {item.name || "artifact"}
             </a>
-          )}
+          ))}
           {m.content && !streaming && (
             <div className="msg-actions">
               <CopyButton text={m.content} />
