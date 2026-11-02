@@ -16,7 +16,7 @@ export default function Composer({
   onToggleAgent,
 }) {
   const [text, setText] = useState("");
-  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [responseModeOpen, setResponseModeOpen] = useState(false);
   const textareaRef = useRef(null);
 
@@ -75,18 +75,28 @@ export default function Composer({
         }
         .composer textarea::placeholder { color: var(--text-tertiary); }
         .composer-tools { width:100%; display:flex; align-items:center; gap:8px; }
-        .composer-options-trigger {
+        .composer-sources { position:relative; flex-shrink:0; }
+        .composer-sources-trigger {
           display:flex; align-items:center; gap:6px; min-height:34px; max-width:100%;
           padding:6px 10px; border:1px solid var(--border); border-radius:999px;
           background:var(--bg-1); color:var(--text-secondary); cursor:pointer; font-size:12px;
           overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
         }
-        .composer-options-trigger:hover, .composer-options-trigger.active { border-color:var(--accent); color:var(--text-primary); }
-        .composer-options-trigger.typing { width:34px; padding:6px; justify-content:center; }
-        .composer-options-label { overflow:hidden; text-overflow:ellipsis; }
-        .composer-options { width:100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:4px 0 2px; }
-        .composer-option { min-height:34px; padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:var(--bg-1); color:var(--text-secondary); cursor:pointer; font-size:12px; }
-        .composer-option.active { border-color:var(--accent); background:var(--accent-dim); color:var(--accent); }
+        .composer-sources-trigger:hover, .composer-sources-trigger.active { border-color:var(--accent); color:var(--text-primary); }
+        .composer-sources-trigger.typing { width:34px; padding:6px; justify-content:center; }
+        .composer-sources-label { overflow:hidden; text-overflow:ellipsis; }
+        .composer-sources-menu {
+          position:absolute; right:0; bottom:calc(100% + 8px); z-index:220; width:190px;
+          padding:6px; border:1px solid var(--border); border-radius:var(--radius-md);
+          background:var(--bg-2); box-shadow:0 18px 45px rgba(0,0,0,.42);
+          animation:menu-in .16s ease-out;
+        }
+        .composer-source-option {
+          width:100%; display:flex; align-items:center; justify-content:space-between;
+          min-height:38px; padding:7px 9px; border:0; border-radius:var(--radius-sm);
+          background:transparent; color:var(--text-secondary); cursor:pointer; text-align:left; font-size:12.5px;
+        }
+        .composer-source-option:hover, .composer-source-option.selected { background:var(--accent-dim); color:var(--text-primary); }
         .composer-mode { position:relative; flex-shrink:0; }
         .composer-mode-trigger {
           display:flex; align-items:center; gap:5px; min-height:34px; max-width:170px;
@@ -111,6 +121,9 @@ export default function Composer({
           .composer-mode { flex:1; min-width:0; }
           .composer-mode-trigger { max-width:none; width:100%; justify-content:space-between; }
           .composer-mode-menu { left:0; right:0; width:auto; min-width:180px; }
+          .composer-sources { min-width:0; }
+          .composer-sources-trigger { max-width:128px; }
+          .composer-sources-menu { width:min(220px, calc(100vw - 24px)); }
         }
         .composer-model { min-width:0; max-width:100%; }
         .composer-model .model-selector { max-width:100%; }
@@ -118,8 +131,6 @@ export default function Composer({
         @media (max-width:600px) {
           .composer { padding-left:12px; padding-right:12px; }
           .composer-input-row { padding-left:4px; }
-          .composer-options { align-items:stretch; }
-          .composer-option { flex:1; }
         }
         .composer-send {
           display: flex; align-items: center; justify-content: center;
@@ -159,7 +170,10 @@ export default function Composer({
             <button
               type="button"
               className={`composer-mode-trigger ${responseModeOpen ? "active" : ""}`}
-              onClick={() => setResponseModeOpen((value) => !value)}
+              onClick={() => {
+                setSourcesOpen(false);
+                setResponseModeOpen((value) => !value);
+              }}
               aria-expanded={responseModeOpen}
             >
               {selectedModeLabel}<ChevronDown size={13} />
@@ -183,37 +197,42 @@ export default function Composer({
               </div>
             )}
           </div>
-          <button
-            type="button"
-            className={`composer-options-trigger ${optionsOpen ? "active" : ""} ${text.trim() && !optionsOpen ? "typing" : ""}`}
-            onClick={() => setOptionsOpen((value) => !value)}
-            aria-expanded={optionsOpen}
-            aria-label={optionsOpen ? "Close chat options" : "Open chat options"}
-          >
-            {text.trim() && !optionsOpen ? <Plus size={18} /> : optionsOpen ? <X size={15} /> : (
-              <>
-                <span className="composer-options-label">
-                  {webSearch || allSources || agentWorkflow
-                    ? [allSources && "All sources", !allSources && webSearch && "Web", agentWorkflow && "Agent"].filter(Boolean).join(" · ")
-                    : "Options"}
-                </span>
-                <ChevronDown size={14} />
-              </>
+          <div className="composer-sources">
+            <button
+              type="button"
+              className={`composer-sources-trigger ${sourcesOpen ? "active" : ""} ${text.trim() && !sourcesOpen ? "typing" : ""}`}
+              onClick={() => {
+                setResponseModeOpen(false);
+                setSourcesOpen((value) => !value);
+              }}
+              aria-expanded={sourcesOpen}
+              aria-label={sourcesOpen ? "Close source selector" : "Open source selector"}
+            >
+              {text.trim() && !sourcesOpen ? <Plus size={18} /> : sourcesOpen ? <X size={15} /> : (
+                <>
+                  <span className="composer-sources-label">
+                    {webSearch || allSources || agentWorkflow
+                      ? [allSources && "All sources", !allSources && webSearch && "Web", agentWorkflow && "Agent"].filter(Boolean).join(" · ")
+                      : "Sources"}
+                  </span>
+                  <ChevronDown size={14} />
+                </>
+              )}
+            </button>
+            {sourcesOpen && (
+              <div className="composer-sources-menu">
+                <button type="button" className={`composer-source-option ${allSources ? "selected" : ""}`} onClick={() => { onToggleAllSources(); setSourcesOpen(false); }} aria-pressed={allSources} title="Use memory, the selected knowledge base, and live web search together">
+                  <span>All sources</span>{allSources && <span>✓</span>}
+                </button>
+                <button type="button" className={`composer-source-option ${webSearch && !allSources ? "selected" : ""}`} onClick={() => { onToggleWeb(); setSourcesOpen(false); }} aria-pressed={webSearch && !allSources}>
+                  <span>Web</span>{webSearch && !allSources && <span>✓</span>}
+                </button>
+                <button type="button" className={`composer-source-option ${agentWorkflow ? "selected" : ""}`} onClick={() => { onToggleAgent(); setSourcesOpen(false); }} aria-pressed={agentWorkflow}>
+                  <span>Agent</span>{agentWorkflow && <span>✓</span>}
+                </button>
+              </div>
             )}
-          </button>
-          {optionsOpen && (
-            <div className="composer-options">
-              <button type="button" className={`composer-option ${allSources ? "active" : ""}`} onClick={onToggleAllSources} aria-pressed={allSources} title="Use memory, the selected knowledge base, and live web search together">
-                All sources
-              </button>
-              <button type="button" className={`composer-option ${webSearch && !allSources ? "active" : ""}`} onClick={onToggleWeb} aria-pressed={webSearch && !allSources}>
-                Web
-              </button>
-              <button type="button" className={`composer-option ${agentWorkflow ? "active" : ""}`} onClick={onToggleAgent} aria-pressed={agentWorkflow}>
-                Agent
-              </button>
-            </div>
-          )}
+          </div>
         </div>
       </div>
       <div className="composer-hint">Press Enter to send, or Shift + Enter for a new line</div>
