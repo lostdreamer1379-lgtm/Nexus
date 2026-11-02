@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Info } from "lucide-react";
 import { api, ApiError } from "../../api/client";
 
@@ -24,12 +24,11 @@ export default function CreateKBModal({ onClose, onCreated }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [verifiedEmbeddingModels, setVerifiedEmbeddingModels] = useState([]);
+  const [checkingEmbeddingModels, setCheckingEmbeddingModels] = useState(false);
 
   const selectedConnection = connections.find((connection) => connection.id === connectionId);
-  const embeddingModels = useMemo(() => {
-    const providerType = selectedConnection?.provider_type;
-    return COMMON_EMBEDDING_MODELS.filter((model) => model.providers.includes(providerType));
-  }, [selectedConnection]);
+  const embeddingModels = verifiedEmbeddingModels;
 
   useEffect(() => {
     api.get("/api/v1/providers/connections").then((list) => {
@@ -37,19 +36,30 @@ export default function CreateKBModal({ onClose, onCreated }) {
       setConnections(connected);
       if (connected.length > 0) {
         setConnectionId(connected[0].id);
-        setEmbeddingModelChoice(
-          COMMON_EMBEDDING_MODELS.find((model) => model.providers.includes(connected[0].provider_type))?.id || "custom"
-        );
       }
     });
   }, []);
 
   useEffect(() => {
-    if (embeddingModels.length === 0) {
-      setEmbeddingModelChoice("custom");
+    if (!selectedConnection) {
+      setVerifiedEmbeddingModels([]);
       return;
     }
-    if (!embeddingModels.some((model) => model.id === embeddingModelChoice)) {
+    setCheckingEmbeddingModels(true);
+    api.post(`/api/v1/providers/connections/${selectedConnection.id}/embedding-models/check`)
+      .then((result) => {
+        setVerifiedEmbeddingModels(result.models || []);
+        setEmbeddingModelChoice(result.models?.[0]?.id || "custom");
+      })
+      .catch(() => {
+        setVerifiedEmbeddingModels([]);
+        setEmbeddingModelChoice("custom");
+      })
+      .finally(() => setCheckingEmbeddingModels(false));
+  }, [selectedConnection]);
+
+  useEffect(() => {
+    if (embeddingModels.length > 0 && !embeddingModels.some((model) => model.id === embeddingModelChoice)) {
       setEmbeddingModelChoice(embeddingModels[0].id);
       setCustomModelId("");
     }
@@ -67,6 +77,15 @@ export default function CreateKBModal({ onClose, onCreated }) {
     }
     setSubmitting(true);
     try {
+      if (embeddingModelChoice === "custom" && connectionId) {
+        const check = await api.post(
+          `/api/v1/providers/connections/${connectionId}/embedding-models/check`,
+          { custom_model_id: effectiveModelId }
+        );
+        if (!check.models?.some((model) => model.id === effectiveModelId)) {
+          throw new Error("The custom embedding model failed the live capability check.");
+        }
+      }
       const kb = await api.post("/api/v1/rag/knowledge-bases", {
         name: name.trim(),
         description: description.trim() || null,
@@ -78,7 +97,7 @@ export default function CreateKBModal({ onClose, onCreated }) {
       });
       onCreated(kb);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong.");
+      setError(err instanceof ApiError || err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setSubmitting(false);
     }
@@ -153,9 +172,11 @@ export default function CreateKBModal({ onClose, onCreated }) {
                 if (e.target.value !== "custom") setCustomModelId("");
               }}
             >
+            {checkingEmbeddingModels && <option value="">Checking available embedding models…</option>}
             {embeddingModels.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
+              <option key={m.id} value={m.id}>{m.label} ({m.dimensions}d)</option>
             ))}
+            <option value="custom">Enter a custom model ID</option>
             </select>
             {embeddingModelChoice === "custom" && (
               <input

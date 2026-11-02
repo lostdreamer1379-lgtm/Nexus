@@ -10,6 +10,9 @@ from app.models import EncryptedCredential, ProviderConnection, User, UserModel
 from app.providers.base import ProviderError
 from app.providers.custom import validate_custom_base_url
 from app.providers.registry import SUPPORTED_PROVIDER_TYPES, build_adapter, build_adapter_from_key
+from app.rag.embeddings import EmbeddingError, embed_texts
+from app.rag.ingestion import _default_base_url
+from app.security import decrypt_secret
 from app.schemas import (
     ProviderConnectionCreate,
     ProviderConnectionOut,
@@ -27,6 +30,35 @@ class ModelDiscoverySummary(BaseModel):
     removed: list[str]
     verified: int
     message: str
+
+
+class VerifiedEmbeddingModel(BaseModel):
+    id: str
+    label: str
+    dimensions: int | None = None
+
+
+class EmbeddingModelCheckResult(BaseModel):
+    models: list[VerifiedEmbeddingModel]
+    checked: int
+    failed: list[str]
+    message: str
+
+
+class EmbeddingModelCheckRequest(BaseModel):
+    custom_model_id: str | None = None
+
+
+COMMON_EMBEDDING_CANDIDATES = {
+    "openai": ["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"],
+    "nvidia": ["nvidia/nv-embedqa-e5-v5", "nvidia/llama-3.2-nv-embedqa-1b-v2"],
+    "gemini": ["gemini-embedding-001"],
+}
+
+
+def _looks_like_embedding_model(model_id: str) -> bool:
+    lowered = model_id.lower()
+    return any(token in lowered for token in ("embed", "embedding", "e5", "bge", "gte"))
 
 
 @router.get("", response_model=list[str])
@@ -261,4 +293,74 @@ async def refresh_models(connection_id: str, current_user: User = Depends(get_cu
         removed=removed_names,
         verified=len(result),
         message=" ".join(message_parts),
+    )
+
+
+@router.post("/connections/{connection_id}/embedding-models/check", response_model=EmbeddingModelCheckResult)
+async def check_embedding_models(
+    connection_id: str,
+    payload: EmbeddingModelCheckRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    conn = _get_owned_connection(db, connection_id, current_user)
+    if not conn.credential:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provider connection has no API credential")
+
+    candidates: list[str] = []
+    try:
+        discovered = await build_adapter(conn).discover_models()
+        candidates.extend(
+            model.provider_model_id for model in discovered
+            if model.provider_model_id and _looks_like_embedding_model(model.provider_model_id)
+        )
+    except ProviderError:
+        # A provider may support embeddings while not exposing /models.
+        pass
+    candidates.extend(COMMON_EMBEDDING_CANDIDATES.get(conn.provider_type, []))
+    if payload and payload.custom_model_id and payload.custom_model_id.strip():
+        candidates.insert(0, payload.custom_model_id.strip())
+    candidates = list(dict.fromkeys(candidates))
+    if not candidates:
+        return EmbeddingModelCheckResult(
+            models=[],
+            checked=0,
+            failed=[],
+            message="No embedding candidates were exposed by this provider. Add a custom model ID to test manually.",
+        )
+
+    api_key = decrypt_secret(conn.credential.encrypted_secret)
+    base_url = conn.base_url or _default_base_url(conn.provider_type)
+    verified: list[VerifiedEmbeddingModel] = []
+    failed: list[str] = []
+    for model_id in candidates[:30]:
+        try:
+            vectors = await embed_texts(
+                ["Nexus AI embedding capability check."],
+                api_key=api_key,
+                base_url=base_url,
+                model_id=model_id,
+                provider_type=conn.provider_type,
+            )
+            if vectors:
+                verified.append(VerifiedEmbeddingModel(
+                    id=model_id,
+                    label=model_id,
+                    dimensions=len(vectors[0]),
+                ))
+            else:
+                failed.append(model_id)
+        except (EmbeddingError, ValueError):
+            failed.append(model_id)
+
+    message = (
+        f"Verified {len(verified)} embedding model{'s' if len(verified) != 1 else ''}."
+        if verified else
+        "No embedding models passed the live capability check. You can still test a custom model ID."
+    )
+    return EmbeddingModelCheckResult(
+        models=verified,
+        checked=len(candidates[:30]),
+        failed=failed,
+        message=message,
     )

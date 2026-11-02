@@ -4,7 +4,6 @@ import { api, ApiError, uploadDocument } from "../../api/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { emitSystemEvent } from "../../utils/systemEvents.js";
-import { COMMON_EMBEDDING_MODELS } from "./CreateKBModal.jsx";
 
 const STATUS_META = {
   pending:    { icon: Clock,       color: "var(--text-tertiary)", label: "Queued" },
@@ -59,7 +58,8 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
   const [customEmbeddingModel, setCustomEmbeddingModel] = useState("");
   const [savingEmbedding, setSavingEmbedding] = useState(false);
   const [embeddingError, setEmbeddingError] = useState(null);
-  const embeddingInitializedRef = useRef(false);
+  const [verifiedEmbeddingModels, setVerifiedEmbeddingModels] = useState([]);
+  const [checkingEmbeddingModels, setCheckingEmbeddingModels] = useState(false);
   const [compareA, setCompareA] = useState("");
   const [compareB, setCompareB] = useState("");
   const [compareModel, setCompareModel] = useState("");
@@ -109,18 +109,27 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
   }, [kb.embedding_connection_id]);
 
   const selectedEmbeddingConnection = connections.find((connection) => connection.id === embeddingConnectionId);
-  const embeddingModels = COMMON_EMBEDDING_MODELS.filter((model) =>
-    model.providers.includes(selectedEmbeddingConnection?.provider_type)
-  );
+  const embeddingModels = verifiedEmbeddingModels;
   const effectiveEmbeddingModel = embeddingModelChoice === "custom" ? customEmbeddingModel.trim() : embeddingModelChoice;
 
   useEffect(() => {
-    if (embeddingInitializedRef.current || !selectedEmbeddingConnection) return;
+    if (!selectedEmbeddingConnection) return;
+    setCheckingEmbeddingModels(true);
+    api.post(`/api/v1/providers/connections/${selectedEmbeddingConnection.id}/embedding-models/check`)
+      .then((result) => {
+        setVerifiedEmbeddingModels(result.models || []);
+        setEmbeddingError(result.models?.length ? null : result.message);
+      })
+      .catch((err) => setEmbeddingError(err instanceof ApiError ? err.message : "Could not verify embedding models."))
+      .finally(() => setCheckingEmbeddingModels(false));
+  }, [selectedEmbeddingConnection]);
+
+  useEffect(() => {
+    if (!selectedEmbeddingConnection || checkingEmbeddingModels) return;
     const isKnownModel = embeddingModels.some((model) => model.id === kb.embedding_model_id);
     setEmbeddingModelChoice(isKnownModel ? kb.embedding_model_id : "custom");
     if (!isKnownModel) setCustomEmbeddingModel(kb.embedding_model_id);
-    embeddingInitializedRef.current = true;
-  }, [embeddingModels, kb.embedding_model_id, selectedEmbeddingConnection]);
+  }, [embeddingModels, kb.embedding_model_id, selectedEmbeddingConnection, checkingEmbeddingModels]);
 
   const saveEmbeddingSettings = async () => {
     if (!effectiveEmbeddingModel || !embeddingConnectionId) {
@@ -130,6 +139,15 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
     setEmbeddingError(null);
     setSavingEmbedding(true);
     try {
+      if (embeddingModelChoice === "custom") {
+        const check = await api.post(
+          `/api/v1/providers/connections/${embeddingConnectionId}/embedding-models/check`,
+          { custom_model_id: effectiveEmbeddingModel }
+        );
+        if (!check.models?.some((model) => model.id === effectiveEmbeddingModel)) {
+          throw new Error("The custom embedding model failed the live capability check.");
+        }
+      }
       const updated = await api.patch(`/api/v1/rag/knowledge-bases/${kb.id}`, {
         embedding_connection_id: embeddingConnectionId,
         embedding_model_id: effectiveEmbeddingModel,
@@ -138,7 +156,7 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
       setEmbeddingModelChoice(updated.embedding_model_id);
       setCustomEmbeddingModel("");
     } catch (err) {
-      setEmbeddingError(err instanceof ApiError ? err.message : "Could not update embedding settings.");
+      setEmbeddingError(err instanceof ApiError || err instanceof Error ? err.message : "Could not update embedding settings.");
     } finally {
       setSavingEmbedding(false);
     }
@@ -360,7 +378,8 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
                 setEmbeddingModelChoice(e.target.value);
                 if (e.target.value !== "custom") setCustomEmbeddingModel("");
               }}>
-                {embeddingModels.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}
+                {checkingEmbeddingModels && <option value="">Checking available embedding models…</option>}
+                {embeddingModels.map((model) => <option key={model.id} value={model.id}>{model.label} ({model.dimensions}d)</option>)}
                 <option value="custom">Enter a custom model ID</option>
               </select>
               {embeddingModelChoice === "custom" && (
