@@ -67,6 +67,26 @@ export default function ChatView({ onConversationChange }) {
   const contextLength = selectedModel?.context_length;
   const remainingTokens = contextLength ? Math.max(0, contextLength - usedTokens) : null;
 
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("nexus-response-modes") || "{}");
+      setResponseMode(saved[conversationId || "new"] || "chat");
+    } catch {
+      setResponseMode("chat");
+    }
+  }, [conversationId]);
+
+  const selectResponseMode = (mode) => {
+    setResponseMode(mode);
+    try {
+      const saved = JSON.parse(localStorage.getItem("nexus-response-modes") || "{}");
+      saved[conversationId || "new"] = mode;
+      localStorage.setItem("nexus-response-modes", JSON.stringify(saved));
+    } catch {
+      // Response mode is a convenience preference.
+    }
+  };
+
   const toggleWebSearch = () => setWebSearch((value) => !value);
   const toggleAllSources = () => setAllSources((value) => !value);
   const toggleAgentWorkflow = () => setAgentWorkflow((value) => !value);
@@ -219,6 +239,15 @@ export default function ChatView({ onConversationChange }) {
             if (event.memory_used) emitTelemetry({ kind: "memory", node: "memory", title: "Memory context loaded", detail: "Approved memories added to the model context", status: "complete" });
             resolvedConversationId = event.conversation_id;
             activeConversationIdRef.current = event.conversation_id;
+            if (!conversationId) {
+              try {
+                const saved = JSON.parse(localStorage.getItem("nexus-response-modes") || "{}");
+                saved[event.conversation_id] = responseMode;
+                localStorage.setItem("nexus-response-modes", JSON.stringify(saved));
+              } catch {
+                // Response mode persistence is optional.
+              }
+            }
             markConversationActive(event.conversation_id, {
               model: event.model_display_name,
               title: "Generating response",
@@ -401,18 +430,10 @@ export default function ChatView({ onConversationChange }) {
         }
         .chat-welcome h2 { font-size: 20px; margin: 0 0 var(--space-2); }
         .chat-welcome p { color: var(--text-secondary); font-size: 14px; max-width: 420px; margin: 0; }
-        .response-mode-select { max-width: 150px; min-width: 0; }
-        @media (max-width: 600px) { .response-mode-select { max-width: 130px; font-size: 12px; } }
       `}</style>
 
       <div className="chat-header">
         <ModelSelector models={modeModels} selectedModelId={selectedModelId} onSelect={setSelectedModelId} />
-        <select className="response-mode-select" value={responseMode} onChange={(event) => setResponseMode(event.target.value)} aria-label="Response format">
-          <option value="chat">Normal chat</option>
-          <option value="zip">Download ZIP</option>
-          <option value="photo">Photo / image</option>
-          <option value="video">Video</option>
-        </select>
         {knowledgeBases.length > 0 && (
           <>
             <div className="chat-header-divider" />
@@ -527,6 +548,8 @@ export default function ChatView({ onConversationChange }) {
         disabled={!selectedModelId || (responseMode !== "chat" && modeModels.length === 0)}
         webSearch={webSearch}
         allSources={allSources}
+        responseMode={responseMode}
+        onResponseModeChange={selectResponseMode}
         agentWorkflow={agentWorkflow}
         onToggleWeb={toggleWebSearch}
         onToggleAllSources={toggleAllSources}

@@ -352,6 +352,8 @@ async def chat_completions(
         try:
             if artifact_kind == "zip":
                 _, artifact_name = _create_project_zip()
+                assembled = "Your project ZIP is ready to download."
+                yield _sse({"type": "delta", "content": assembled})
                 yield _sse({
                     "type": "artifact",
                     "kind": "zip",
@@ -359,6 +361,13 @@ async def chat_completions(
                     "download_url": f"/api/v1/chat/artifacts/{artifact_name}",
                 })
             elif artifact_kind in {"photo", "video"}:
+                assembled = (
+                    f"/{artifact_kind} was recognized. This installation currently supports "
+                    "text responses and downloadable ZIP artifacts, but no configured "
+                    f"{artifact_kind}-generation provider is available. Add a compatible "
+                    "media provider to generate a downloadable file."
+                )
+                yield _sse({"type": "delta", "content": assembled})
                 yield _sse({
                     "type": "artifact",
                     "kind": artifact_kind,
@@ -368,7 +377,7 @@ async def chat_completions(
                         "is configured in this deployment."
                     ),
                 })
-            if payload.agent_workflow:
+            elif payload.agent_workflow:
                 yield _sse({"type": "workflow", "status": "planning", "step": 0})
                 plan_messages = [
                     ChatMessage(
@@ -439,8 +448,9 @@ async def chat_completions(
                         yield _sse({"type": "delta", "content": chunk.delta})
                     if chunk.done:
                         break
-        except Exception as exc:  # noqa: BLE001 - never leave the stream hanging on an unexpected error
-            error_text = "An unexpected error occurred while streaming the response."
+        except Exception as exc:  # noqa: BLE001 - keep the SSE stream and persistence path alive
+            logger.exception("Chat stream failed for conversation %s", conversation_id)
+            error_text = f"Response generation failed: {exc}" if str(exc) else "Response generation failed."
 
         stream_db = None
         try:

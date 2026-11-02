@@ -8,6 +8,8 @@ export default function Composer({
   disabled,
   webSearch,
   allSources,
+  responseMode,
+  onResponseModeChange,
   agentWorkflow,
   onToggleWeb,
   onToggleAllSources,
@@ -76,6 +78,11 @@ export default function Composer({
         .composer-options { width:100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:4px 0 2px; }
         .composer-option { min-height:34px; padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:var(--bg-1); color:var(--text-secondary); cursor:pointer; font-size:12px; }
         .composer-option.active { border-color:var(--accent); background:var(--accent-dim); color:var(--accent); }
+        .composer-mode-select {
+          min-height:34px; max-width:170px; min-width:0; padding:6px 26px 6px 10px;
+          border:1px solid var(--border); border-radius:999px; background:var(--bg-1);
+          color:var(--text-secondary); font-size:12px;
+        }
         .composer-model { min-width:0; max-width:100%; }
         .composer-model .model-selector { max-width:100%; }
         .composer-model .ms-trigger { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
@@ -84,6 +91,7 @@ export default function Composer({
           .composer-input-row { padding-left:4px; }
           .composer-options { align-items:stretch; }
           .composer-option { flex:1; }
+          .composer-mode-select { flex:1; max-width:none; }
         }
         .composer-send {
           display: flex; align-items: center; justify-content: center;
@@ -119,6 +127,17 @@ export default function Composer({
           )}
         </div>
         <div className="composer-tools">
+          <select
+            className="composer-mode-select"
+            value={responseMode}
+            onChange={(event) => onResponseModeChange(event.target.value)}
+            aria-label="Response format"
+          >
+            <option value="chat">Normal chat</option>
+            <option value="zip">Download ZIP</option>
+            <option value="photo">Photo / image</option>
+            <option value="video">Video</option>
+          </select>
           <button
             type="button"
             className={`composer-options-trigger ${optionsOpen ? "active" : ""} ${text.trim() && !optionsOpen ? "typing" : ""}`}
