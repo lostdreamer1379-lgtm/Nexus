@@ -69,6 +69,10 @@ it is not a promise of future functionality.
   uploads, graphs, and memory operations.
 - Manage the account through Settings: log out, clear local cache, clear
   conversations, clear memories, and permanently delete the account.
+- Personalize the system-wide color palette with Dark, AMOLED black, Light,
+  GitHub green-on-black, Catppuccin, or AMOLED Godzilla neon-blue themes.
+- Use animated theme and chat-composer menus that remain compact and responsive
+  on phone-sized screens.
 - Generate a new project from model-streamed code with `/zip`, display the
   generated files as readable Markdown, and download both the generated ZIP
   and a standalone `README.md`.
@@ -144,6 +148,7 @@ Chat supports:
 - Knowledge-base selection
 - Live web search toggle
 - Bounded agent-workflow toggle
+- Source selector for All sources, Web, and Agent modes in an anchored menu
 - Approximate context-token display
 - Provider error reporting
 - Response modes for normal chat, generated project ZIPs, images, and video
@@ -195,6 +200,20 @@ Settings provides:
   bases, preferences, conversations, and memories
 
 Destructive server-side actions require confirmation in the interface.
+
+### Appearance
+
+The Settings page provides a smooth theme selector. Theme changes are applied
+to the document root through shared CSS color tokens, so the selected palette
+updates the entire interface without changing layout or functionality. The
+available themes are:
+
+- Dark — the default charcoal palette.
+- AMOLED black — pure-black surfaces with the default blue accent.
+- Light — a light neutral palette with blue accents.
+- GitHub — AMOLED black surfaces with a vibrant green accent.
+- Catppuccin — a dark Catppuccin-inspired pastel palette.
+- AMOLED Godzilla — AMOLED black surfaces with neon radiation-blue accents.
 
 ---
 
@@ -422,6 +441,12 @@ The frontend is a React 18 single-page application built with Vite.
 `App.jsx` provides authenticated and unauthenticated route groups.
 `AppShell.jsx` provides the persistent sidebar and the main route outlet.
 
+The sidebar remains mounted while the active screen changes. Route-level
+screens are lazy-loaded into separate chunks, and their chunks are prefetched
+when a sidebar link is hovered or focused. This keeps the initial bundle small
+while making subsequent sidebar navigation faster. A short route transition
+keeps page changes visually smooth without changing screen behavior.
+
 ### Main routes
 
 | Route | Screen |
@@ -432,6 +457,7 @@ The frontend is a React 18 single-page application built with Vite.
 | `/models` | Model Library |
 | `/knowledge-bases` | Knowledge Base Manager |
 | `/settings` | Settings and memory review |
+| `/memories` | Saved memory review |
 | `/visualizer` | System Visualizer |
 
 ### API client
