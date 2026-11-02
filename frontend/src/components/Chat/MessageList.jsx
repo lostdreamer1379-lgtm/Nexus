@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { API_BASE_URL } from "../../api/client";
 import { Copy, Check, RotateCcw, AlertTriangle, BookOpen, ChevronDown, ChevronUp, BrainCircuit, Download } from "lucide-react";
 
 function copyableResponse(text) {
@@ -129,6 +130,15 @@ function WebSources({ sources }) {
   );
 }
 
+function persistedArtifact(content) {
+  const match = content?.match(/\[Download project ZIP\]\(([^)]+)\)/);
+  if (!match) return null;
+  return {
+    name: "nexus-ai-project.zip",
+    download_url: match[1].startsWith("http") ? match[1] : `${API_BASE_URL}${match[1]}`,
+  };
+}
+
 export default function MessageList({ messages, streaming, onRegenerate, onSaveMemory, savingMemory, savedMemoryIds }) {
   const bottomRef = useRef(null);
   const previousMessageCount = useRef(messages.length);
@@ -255,6 +265,11 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
 
       {messages.map((m, i) => (
         <div key={m.id} className={`msg-row ${m.role}`}>
+          {(() => {
+            const artifact = m.artifact || persistedArtifact(m.content);
+            const renderedContent = m.content?.replace(/\n*\[Download project ZIP\]\([^)]+\)/, "") || "";
+            return (
+              <>
           {m.role === "assistant" && (
             <span className="msg-role">{m.model_display_name || "Assistant"}</span>
           )}
@@ -270,7 +285,7 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
                   table: ({ children }) => <div className="table-scroll"><table>{children}</table></div>,
                 }}
               >
-                {repairMarkdownTables(m.content)}
+                {repairMarkdownTables(renderedContent)}
               </ReactMarkdown>
             )}
           </div>
@@ -286,9 +301,9 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
           {m.role === "assistant" && m.web_sources?.length > 0 && (
             <WebSources sources={m.web_sources} />
           )}
-          {m.role === "assistant" && m.artifact?.download_url && (
-            <a className="artifact-download" href={m.artifact.download_url} download={m.artifact.name || "download"}>
-              <Download size={14} /> Download {m.artifact.name || "artifact"}
+          {m.role === "assistant" && artifact?.download_url && (
+            <a className="artifact-download" href={artifact.download_url} download={artifact.name || "download"}>
+              <Download size={14} /> Download {artifact.name || "artifact"}
             </a>
           )}
           {m.content && !streaming && (
@@ -309,6 +324,9 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
               </button>
             </div>
           )}
+              </>
+            );
+          })()}
         </div>
       ))}
       <div ref={bottomRef} />

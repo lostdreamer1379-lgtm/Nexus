@@ -275,6 +275,16 @@ export default function ChatView({ onConversationChange }) {
               });
             }
             if (!conversationId) onConversationChange?.();
+          } else if (event.type === "artifact_status") {
+            emitTelemetry({ kind: "artifact", node: "artifact", title: "Building ZIP", detail: event.detail || "Preparing archive", status: "running" });
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant" && !last.content) {
+                next[next.length - 1] = { ...last, content: event.detail || "Preparing the codebase archive…" };
+              }
+              return next;
+            });
           } else if (event.type === "artifact") {
             const artifact = event.download_url
               ? { ...event, download_url: `${API_BASE_URL}${event.download_url}` }

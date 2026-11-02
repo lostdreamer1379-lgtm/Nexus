@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+import asyncio
 import tempfile
 import uuid
 import zipfile
@@ -366,14 +367,19 @@ async def chat_completions(
 
         try:
             if artifact_kind == "zip":
-                _, artifact_name = _create_project_zip()
-                assembled = "Your project ZIP is ready to download."
+                yield _sse({"type": "artifact_status", "kind": "zip", "status": "building", "detail": "Preparing the codebase archive…"})
+                _, artifact_name = await asyncio.to_thread(_create_project_zip)
+                download_path = f"/api/v1/chat/artifacts/{artifact_name}"
+                assembled = (
+                    "Your project ZIP is ready to download.\n\n"
+                    f"[Download project ZIP]({download_path})"
+                )
                 yield _sse({"type": "delta", "content": assembled})
                 yield _sse({
                     "type": "artifact",
                     "kind": "zip",
                     "name": "nexus-ai-project.zip",
-                    "download_url": f"/api/v1/chat/artifacts/{artifact_name}",
+                    "download_url": download_path,
                 })
             elif artifact_kind in {"photo", "video"}:
                 assembled = (
