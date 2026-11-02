@@ -44,6 +44,7 @@ export default function ChatView({ onConversationChange }) {
   const [webSearch, setWebSearch] = useState(initialPreferences.current.webSearch);
   const [allSources, setAllSources] = useState(initialPreferences.current.allSources);
   const [agentWorkflow, setAgentWorkflow] = useState(initialPreferences.current.agentWorkflow);
+  const [responseMode, setResponseMode] = useState("chat");
   const [workflowStatus, setWorkflowStatus] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loadingConvo, setLoadingConvo] = useState(false);
@@ -56,6 +57,12 @@ export default function ChatView({ onConversationChange }) {
   const abortRef = useRef(null);
   const activeConversationIdRef = useRef(conversationId);
   const selectedModel = models.find((m) => m.id === selectedModelId);
+  const modeModels = responseMode === "chat" || responseMode === "zip"
+    ? models
+    : models.filter((model) => {
+      const id = `${model.provider_model_id} ${model.display_name}`.toLowerCase();
+      return model.supports_vision && /(image|photo|picture|video|vision|dall|flux|stable)/.test(id);
+    });
   const usedTokens = estimateMessageTokens(messages);
   const contextLength = selectedModel?.context_length;
   const remainingTokens = contextLength ? Math.max(0, contextLength - usedTokens) : null;
@@ -63,6 +70,12 @@ export default function ChatView({ onConversationChange }) {
   const toggleWebSearch = () => setWebSearch((value) => !value);
   const toggleAllSources = () => setAllSources((value) => !value);
   const toggleAgentWorkflow = () => setAgentWorkflow((value) => !value);
+
+  useEffect(() => {
+    if (modeModels.length && !modeModels.some((model) => model.id === selectedModelId)) {
+      setSelectedModelId(modeModels[0].id);
+    }
+  }, [responseMode, modeModels, selectedModelId]);
 
   useEffect(() => {
     try {
@@ -145,7 +158,9 @@ export default function ChatView({ onConversationChange }) {
   }, [conversationId, streaming]);
 
   const sendMessage = async (text) => {
-    if (!selectedModelId) return;
+    if (!selectedModelId || (responseMode !== "chat" && modeModels.length === 0)) return;
+    const modePrefix = responseMode === "zip" ? "/zip " : responseMode === "photo" ? "/photo " : responseMode === "video" ? "/video " : "";
+    const requestText = text.startsWith("/") || responseMode === "chat" ? text : `${modePrefix}${text}`;
     const automaticWebSearch = LIVE_WEB_CUES.test(text);
     const effectiveWebSearch = webSearch || allSources || automaticWebSearch;
     setStreamError(null);
@@ -187,7 +202,7 @@ export default function ChatView({ onConversationChange }) {
         {
           conversationId,
           modelId: selectedModelId,
-          message: text,
+          message: requestText,
           kbId: selectedKbId,
           webSearch: effectiveWebSearch,
           agentWorkflow,
@@ -386,10 +401,18 @@ export default function ChatView({ onConversationChange }) {
         }
         .chat-welcome h2 { font-size: 20px; margin: 0 0 var(--space-2); }
         .chat-welcome p { color: var(--text-secondary); font-size: 14px; max-width: 420px; margin: 0; }
+        .response-mode-select { max-width: 150px; min-width: 0; }
+        @media (max-width: 600px) { .response-mode-select { max-width: 130px; font-size: 12px; } }
       `}</style>
 
       <div className="chat-header">
-        <ModelSelector models={models} selectedModelId={selectedModelId} onSelect={setSelectedModelId} />
+        <ModelSelector models={modeModels} selectedModelId={selectedModelId} onSelect={setSelectedModelId} />
+        <select className="response-mode-select" value={responseMode} onChange={(event) => setResponseMode(event.target.value)} aria-label="Response format">
+          <option value="chat">Normal chat</option>
+          <option value="zip">Download ZIP</option>
+          <option value="photo">Photo / image</option>
+          <option value="video">Video</option>
+        </select>
         {knowledgeBases.length > 0 && (
           <>
             <div className="chat-header-divider" />
@@ -501,7 +524,7 @@ export default function ChatView({ onConversationChange }) {
         onSend={sendMessage}
         onStop={stopStreaming}
         streaming={streaming}
-        disabled={!selectedModelId}
+        disabled={!selectedModelId || (responseMode !== "chat" && modeModels.length === 0)}
         webSearch={webSearch}
         allSources={allSources}
         agentWorkflow={agentWorkflow}

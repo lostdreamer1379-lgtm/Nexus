@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -385,18 +386,26 @@ async def check_chat_model(
     try:
         adapter = build_adapter(conn)
         parts: list[str] = []
-        async for chunk in adapter.stream_chat(
-            model.provider_model_id,
-            [ChatMessage(role="user", content="Reply with the single word OK.")],
-        ):
-            if chunk.error:
-                return ChatModelCheckResult(usable=False, message=chunk.error)
-            if chunk.delta:
-                parts.append(chunk.delta)
-            if chunk.done:
-                break
+        async def collect_check():
+            async for chunk in adapter.stream_chat(
+                model.provider_model_id,
+                [ChatMessage(role="user", content="Reply with the single word OK.")],
+            ):
+                if chunk.error:
+                    return chunk.error
+                if chunk.delta:
+                    parts.append(chunk.delta)
+                if chunk.done:
+                    break
+            return None
+
+        error = await asyncio.wait_for(collect_check(), timeout=8)
+        if error:
+            return ChatModelCheckResult(usable=False, message=error)
         if "".join(parts).strip():
             return ChatModelCheckResult(usable=True, message="Model completed a live chat capability check.")
         return ChatModelCheckResult(usable=False, message="Model returned no usable text.")
+    except asyncio.TimeoutError:
+        return ChatModelCheckResult(usable=False, message="Model access check timed out.")
     except ProviderError as exc:
         return ChatModelCheckResult(usable=False, message=exc.message)

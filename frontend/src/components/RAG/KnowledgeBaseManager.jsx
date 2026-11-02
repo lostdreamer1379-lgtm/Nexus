@@ -46,18 +46,19 @@ export default function KnowledgeBaseManager() {
   return (
     <div className="page">
       <style>{`
-        .page { height: 100%; overflow-y: auto; padding: var(--space-6) var(--space-5); }
-        .page-inner { max-width: 900px; margin: 0 auto; }
-        .kb-layout { display: flex; gap: var(--space-5); align-items: flex-start; }
+        .page { height: 100%; overflow-y: auto; overflow-x: hidden; padding: var(--space-6) var(--space-5); box-sizing: border-box; }
+        .page-inner { max-width: 1100px; width: 100%; min-width: 0; margin: 0 auto; }
+        .kb-layout { display: flex; gap: var(--space-5); align-items: flex-start; min-width: 0; }
         .kb-list-col { flex: 0 0 320px; display: flex; flex-direction: column; gap: var(--space-3); }
         .kb-detail-col { flex: 1; min-width: 0; }
         @media (max-width: 720px) {
           .kb-layout { flex-direction: column; }
           .kb-list-col { flex: none; width: 100%; }
         }
-        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-5); gap: var(--space-3); }
+        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-5); gap: var(--space-3); min-width: 0; }
         .page-header h1 { font-size: 20px; margin: 0 0 4px; }
         .page-header p { color: var(--text-secondary); font-size: 14px; margin: 0; }
+        @media (max-width: 600px) { .page { padding: 16px 12px; } .page-header { align-items: flex-start; flex-direction: column; } .page-header .btn { width: 100%; justify-content: center; } }
       `}</style>
 
       <div className="page-inner">

@@ -99,15 +99,26 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
     api.get("/api/v1/models?enabled_only=true").then((list) => {
       setModels(list);
       setCheckingChatModels(true);
-      Promise.all(list.map(async (model) => {
+      const cacheKey = "nexus-chat-capability-cache";
+      let cache = {};
+      try { cache = JSON.parse(sessionStorage.getItem(cacheKey) || "{}"); } catch { /* ignore */ }
+      const now = Date.now();
+      const cached = list.filter((model) => cache[model.id] && now - cache[model.id].checkedAt < 300000 && cache[model.id].usable);
+      setUsableModels(cached);
+      setCompareModel((current) => cached.some((model) => model.id === current) ? current : cached[0]?.id || "");
+      const pending = list.filter((model) => !cache[model.id] || now - cache[model.id].checkedAt >= 300000);
+      Promise.all(pending.map(async (model) => {
         try {
           const result = await api.post(`/api/v1/providers/connections/${model.connection_id}/chat-models/${model.id}/check`);
+          cache[model.id] = { usable: result.usable, checkedAt: Date.now() };
           return result.usable ? model : null;
         } catch {
+          cache[model.id] = { usable: false, checkedAt: Date.now() };
           return null;
         }
       })).then((checked) => {
-        const usable = checked.filter(Boolean);
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(cache)); } catch { /* ignore */ }
+        const usable = [...cached, ...checked.filter(Boolean)];
         setUsableModels(usable);
         setCompareModel((current) => usable.some((model) => model.id === current) ? current : usable[0]?.id || "");
       }).finally(() => setCheckingChatModels(false));
@@ -312,7 +323,7 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
   return (
     <div className="kb-detail">
       <style>{`
-        .kb-detail { display: flex; flex-direction: column; gap: var(--space-4); }
+        .kb-detail { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; max-width: 100%; overflow-x: hidden; }
         .kb-detail-header { display: flex; align-items: center; justify-content: space-between; }
         .kb-detail-header h2 { font-size: 17px; margin: 0; }
         .drop-zone {
@@ -344,8 +355,11 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
         .doc-error { font-size: 12px; color: var(--danger); margin: 4px 0 0; }
         .doc-status { display: flex; align-items: center; gap: 4px; font-size: 12px; flex-shrink: 0; }
         .doc-actions { display: flex; gap: 2px; flex-shrink: 0; }
-        .kb-settings-card { background: var(--bg-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); }
-        .kb-settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+        .kb-settings-card { background: var(--bg-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); min-width: 0; max-width: 100%; overflow: hidden; box-sizing: border-box; }
+        .kb-settings-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); min-width: 0; }
+        .kb-settings-grid > * { min-width: 0; max-width: 100%; }
+        .kb-detail input, .kb-detail select, .kb-detail textarea { max-width: 100%; box-sizing: border-box; }
+        .kb-detail .doc-name, .kb-detail .doc-meta, .kb-detail .error-text { overflow-wrap: anywhere; word-break: break-word; }
         .kb-setting { display: flex; flex-direction: column; gap: 3px; }
         .kb-setting-label { font-size: 12px; color: var(--text-tertiary); }
         .kb-setting-value { font-size: 13.5px; font-weight: 500; }
@@ -359,7 +373,7 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
         .graph-edge b { color: var(--accent); margin: 0 5px; }
         .embedding-editor { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
         .embedding-editor-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        @media (max-width: 480px) { .kb-settings-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 760px) { .kb-settings-grid { grid-template-columns: minmax(0, 1fr); } .kb-settings-card { padding: 12px; } .kb-detail-header { min-width: 0; } }
       `}</style>
 
       <div className="kb-detail-header">
