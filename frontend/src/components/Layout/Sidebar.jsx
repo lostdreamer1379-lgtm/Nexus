@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { api } from "../../api/client";
+import { preloadRoute } from "../../utils/routePreload.js";
 
 export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersion }) {
   const { user, logout } = useAuth();
@@ -309,22 +310,22 @@ export default function Sidebar({ mobileOpen, onCloseMobile, conversationsVersio
         </button>
 
         <div className="sb-nav">
-          <NavLink to="/providers" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile}>
+          <NavLink to="/providers" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile} onPointerEnter={() => preloadRoute("/providers")} onFocus={() => preloadRoute("/providers")}>
             <Plug size={16} /> Provider Manager
           </NavLink>
-          <NavLink to="/models" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile}>
+          <NavLink to="/models" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile} onPointerEnter={() => preloadRoute("/models")} onFocus={() => preloadRoute("/models")}>
             <Boxes size={16} /> Model Library
           </NavLink>
-          <NavLink to="/knowledge-bases" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile}>
+          <NavLink to="/knowledge-bases" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile} onPointerEnter={() => preloadRoute("/knowledge-bases")} onFocus={() => preloadRoute("/knowledge-bases")}>
             <Database size={16} /> Knowledge Bases
           </NavLink>
-          <NavLink to="/settings" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile}>
+          <NavLink to="/settings" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile} onPointerEnter={() => preloadRoute("/settings")} onFocus={() => preloadRoute("/settings")}>
             <Settings size={16} /> Settings
           </NavLink>
-          <NavLink to="/memories" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile}>
+          <NavLink to="/memories" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile} onPointerEnter={() => preloadRoute("/memories")} onFocus={() => preloadRoute("/memories")}>
             <BrainCircuit size={16} /> Memories
           </NavLink>
-          <NavLink to="/visualizer" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile}>
+          <NavLink to="/visualizer" className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`} onClick={onCloseMobile} onPointerEnter={() => preloadRoute("/visualizer")} onFocus={() => preloadRoute("/visualizer")}>
             <Activity size={16} /> System Visualizer
           </NavLink>
         </div>

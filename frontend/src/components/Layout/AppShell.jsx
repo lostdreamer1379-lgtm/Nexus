@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
 import ChatView from "../Chat/ChatView.jsx";
 import { Menu } from "lucide-react";
 import { api } from "../../api/client";
 import { applyTheme } from "../../utils/theme.js";
+import { preloadRoute } from "../../utils/routePreload.js";
 
 const ProviderManager = lazy(() => import("../Providers/ProviderManager.jsx"));
 const ModelLibrary = lazy(() => import("../Models/ModelLibrary.jsx"));
@@ -18,6 +19,7 @@ function RouteLoader() {
 }
 
 export default function AppShell() {
+  const location = useLocation();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const touchStart = useRef(null);
   const [conversationsVersion, setConversationsVersion] = useState(0);
@@ -83,6 +85,19 @@ export default function AppShell() {
           align-items: center;
           justify-content: center;
           background: var(--bg-0);
+          animation: route-fade-in .16s ease-out;
+        }
+        .route-stage {
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          animation: route-fade-in .18s ease-out;
+          will-change: opacity, transform;
+        }
+        @keyframes route-fade-in {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         .mobile-topbar {
           display: none;
@@ -122,16 +137,18 @@ export default function AppShell() {
         </div>
 
         <Suspense fallback={<RouteLoader />}>
-          <Routes>
-            <Route path="/" element={<ChatView onConversationChange={bumpConversations} />} />
-            <Route path="/c/:conversationId" element={<ChatView onConversationChange={bumpConversations} />} />
-            <Route path="/providers" element={<ProviderManager />} />
-            <Route path="/models" element={<ModelLibrary />} />
-            <Route path="/knowledge-bases" element={<KnowledgeBaseManager />} />
-            <Route path="/settings" element={<SettingsPanel />} />
-            <Route path="/memories" element={<MemoriesPanel />} />
-            <Route path="/visualizer" element={<SystemVisualizer />} />
-          </Routes>
+          <div className="route-stage" key={location.pathname}>
+            <Routes>
+              <Route path="/" element={<ChatView onConversationChange={bumpConversations} />} />
+              <Route path="/c/:conversationId" element={<ChatView onConversationChange={bumpConversations} />} />
+              <Route path="/providers" element={<ProviderManager />} />
+              <Route path="/models" element={<ModelLibrary />} />
+              <Route path="/knowledge-bases" element={<KnowledgeBaseManager />} />
+              <Route path="/settings" element={<SettingsPanel />} />
+              <Route path="/memories" element={<MemoriesPanel />} />
+              <Route path="/visualizer" element={<SystemVisualizer />} />
+            </Routes>
+          </div>
         </Suspense>
       </div>
     </div>
