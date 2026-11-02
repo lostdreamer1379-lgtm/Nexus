@@ -16,6 +16,7 @@ the client sends beyond "which of MY rows is this".
 """
 import json
 import logging
+import os
 import re
 import tempfile
 import uuid
@@ -111,19 +112,33 @@ def _artifact_command(message: str) -> tuple[str | None, str]:
 def _create_project_zip() -> tuple[str, str]:
     token = uuid.uuid4().hex
     archive = ARTIFACT_ROOT / f"{token}.zip"
-    excluded = {".git", "node_modules", "dist", "__pycache__", ".pytest_cache", "uploads"}
+    excluded = {
+        ".git", "node_modules", "dist", "__pycache__", ".pytest_cache", "uploads",
+        ".venv", "venv", "env", "proc", "sys", "dev", "tmp",
+    }
+    root = PROJECT_ROOT.resolve()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
-        for path in PROJECT_ROOT.rglob("*"):
-            relative = path.relative_to(PROJECT_ROOT)
-            if (
-                not path.is_file()
-                or any(part in excluded for part in relative.parts)
-                or path.name == ".env"
-                or path.name.startswith(".env.")
-                or path.suffix in {".db", ".sqlite", ".sqlite3"}
-            ):
-                continue
-            output.write(path, relative)
+        for current, directories, filenames in os.walk(root, topdown=True, followlinks=False):
+            directories[:] = [
+                name for name in directories
+                if name not in excluded and not (Path(current) / name).is_symlink()
+            ]
+            for filename in filenames:
+                path = Path(current) / filename
+                if path.is_symlink():
+                    continue
+                relative = path.relative_to(root)
+                if (
+                    any(part in excluded for part in relative.parts)
+                    or filename == ".env"
+                    or filename.startswith(".env.")
+                    or path.suffix in {".db", ".sqlite", ".sqlite3"}
+                ):
+                    continue
+                try:
+                    output.write(path, relative)
+                except OSError:
+                    logger.warning("Skipping unreadable project file while creating ZIP: %s", path)
     return token, archive.name
 
 

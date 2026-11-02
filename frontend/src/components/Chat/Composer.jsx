@@ -17,6 +17,7 @@ export default function Composer({
 }) {
   const [text, setText] = useState("");
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [responseModeOpen, setResponseModeOpen] = useState(false);
   const textareaRef = useRef(null);
 
   const submit = () => {
@@ -26,6 +27,14 @@ export default function Composer({
     setText("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
+
+  const responseModes = [
+    ["chat", "Normal chat"],
+    ["zip", "Download ZIP"],
+    ["photo", "Photo / image"],
+    ["video", "Video"],
+  ];
+  const selectedModeLabel = responseModes.find(([value]) => value === responseMode)?.[1] || "Normal chat";
 
   const onKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -78,10 +87,30 @@ export default function Composer({
         .composer-options { width:100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:4px 0 2px; }
         .composer-option { min-height:34px; padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:var(--bg-1); color:var(--text-secondary); cursor:pointer; font-size:12px; }
         .composer-option.active { border-color:var(--accent); background:var(--accent-dim); color:var(--accent); }
-        .composer-mode-select {
-          min-height:34px; max-width:170px; min-width:0; padding:6px 26px 6px 10px;
-          border:1px solid var(--border); border-radius:999px; background:var(--bg-1);
-          color:var(--text-secondary); font-size:12px;
+        .composer-mode { position:relative; flex-shrink:0; }
+        .composer-mode-trigger {
+          display:flex; align-items:center; gap:5px; min-height:34px; max-width:170px;
+          padding:6px 10px; border:1px solid var(--border); border-radius:999px;
+          background:var(--bg-1); color:var(--text-secondary); cursor:pointer; font-size:12px;
+        }
+        .composer-mode-trigger:hover, .composer-mode-trigger.active { border-color:var(--accent); color:var(--text-primary); }
+        .composer-mode-menu {
+          position:absolute; left:0; bottom:calc(100% + 8px); z-index:220; width:190px;
+          padding:6px; border:1px solid var(--border); border-radius:var(--radius-md);
+          background:var(--bg-2); box-shadow:0 18px 45px rgba(0,0,0,.42);
+          animation:menu-in .16s ease-out;
+        }
+        .composer-mode-option {
+          width:100%; display:flex; align-items:center; justify-content:space-between;
+          min-height:38px; padding:7px 9px; border:0; border-radius:var(--radius-sm);
+          background:transparent; color:var(--text-secondary); cursor:pointer; text-align:left; font-size:12.5px;
+        }
+        .composer-mode-option:hover, .composer-mode-option.selected { background:var(--accent-dim); color:var(--text-primary); }
+        @keyframes menu-in { from { opacity:0; transform:translateY(5px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+        @media (max-width:600px) {
+          .composer-mode { flex:1; min-width:0; }
+          .composer-mode-trigger { max-width:none; width:100%; justify-content:space-between; }
+          .composer-mode-menu { left:0; right:0; width:auto; min-width:180px; }
         }
         .composer-model { min-width:0; max-width:100%; }
         .composer-model .model-selector { max-width:100%; }
@@ -91,7 +120,6 @@ export default function Composer({
           .composer-input-row { padding-left:4px; }
           .composer-options { align-items:stretch; }
           .composer-option { flex:1; }
-          .composer-mode-select { flex:1; max-width:none; }
         }
         .composer-send {
           display: flex; align-items: center; justify-content: center;
@@ -127,17 +155,34 @@ export default function Composer({
           )}
         </div>
         <div className="composer-tools">
-          <select
-            className="composer-mode-select"
-            value={responseMode}
-            onChange={(event) => onResponseModeChange(event.target.value)}
-            aria-label="Response format"
-          >
-            <option value="chat">Normal chat</option>
-            <option value="zip">Download ZIP</option>
-            <option value="photo">Photo / image</option>
-            <option value="video">Video</option>
-          </select>
+          <div className="composer-mode">
+            <button
+              type="button"
+              className={`composer-mode-trigger ${responseModeOpen ? "active" : ""}`}
+              onClick={() => setResponseModeOpen((value) => !value)}
+              aria-expanded={responseModeOpen}
+            >
+              {selectedModeLabel}<ChevronDown size={13} />
+            </button>
+            {responseModeOpen && (
+              <div className="composer-mode-menu">
+                {responseModes.map(([value, label]) => (
+                  <button
+                    type="button"
+                    key={value}
+                    className={`composer-mode-option ${responseMode === value ? "selected" : ""}`}
+                    onClick={() => {
+                      onResponseModeChange(value);
+                      setResponseModeOpen(false);
+                    }}
+                  >
+                    <span>{label}</span>
+                    {responseMode === value && <span>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className={`composer-options-trigger ${optionsOpen ? "active" : ""} ${text.trim() && !optionsOpen ? "typing" : ""}`}
