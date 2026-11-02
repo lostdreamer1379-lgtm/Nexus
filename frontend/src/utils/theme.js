@@ -1,6 +1,7 @@
 export function applyTheme(theme) {
-  if (theme === "amoled") {
-    document.documentElement.dataset.theme = "amoled";
+  const themes = new Set(["light", "github", "catppuccin", "godzilla", "amoled"]);
+  if (themes.has(theme)) {
+    document.documentElement.dataset.theme = theme;
   } else {
     delete document.documentElement.dataset.theme;
   }

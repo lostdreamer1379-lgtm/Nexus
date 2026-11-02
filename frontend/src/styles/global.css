@@ -66,6 +66,93 @@
   color-scheme: dark;
 }
 
+/* Light, GitHub, Catppuccin, and AMOLED Godzilla palettes only override the
+   design tokens above; layout and component behavior remain unchanged. */
+:root[data-theme="light"] {
+  --bg-0: #f7f8fa;
+  --bg-1: #ffffff;
+  --bg-2: #f1f3f5;
+  --bg-3: #e5e7eb;
+  --border-subtle: #e5e7eb;
+  --border: #d1d5db;
+  --border-strong: #9ca3af;
+  --text-primary: #17191c;
+  --text-secondary: #4b5563;
+  --text-tertiary: #6b7280;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-dim: #dbeafe;
+  --accent-text-on: #ffffff;
+  --danger-dim: #fee2e2;
+  color-scheme: light;
+}
+
+:root[data-theme="github"] {
+  --bg-0: #f6f8fa;
+  --bg-1: #ffffff;
+  --bg-2: #f6f8fa;
+  --bg-3: #eaeef2;
+  --border-subtle: #d8dee4;
+  --border: #afb8c1;
+  --border-strong: #8c959f;
+  --text-primary: #1f2328;
+  --text-secondary: #59636e;
+  --text-tertiary: #656d76;
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --accent-dim: #ddf4ff;
+  --accent-text-on: #ffffff;
+  --success: #1a7f37;
+  --warning: #9a6700;
+  --danger: #cf222e;
+  --danger-dim: #ffebe9;
+  color-scheme: light;
+}
+
+:root[data-theme="catppuccin"] {
+  --bg-0: #1e1e2e;
+  --bg-1: #181825;
+  --bg-2: #313244;
+  --bg-3: #45475a;
+  --border-subtle: #313244;
+  --border: #45475a;
+  --border-strong: #585b70;
+  --text-primary: #cdd6f4;
+  --text-secondary: #a6adc8;
+  --text-tertiary: #7f849c;
+  --accent: #89b4fa;
+  --accent-hover: #74c7ec;
+  --accent-dim: #334a70;
+  --accent-text-on: #11111b;
+  --success: #a6e3a1;
+  --warning: #f9e2af;
+  --danger: #f38ba8;
+  --danger-dim: #492b3a;
+  color-scheme: dark;
+}
+
+:root[data-theme="godzilla"] {
+  --bg-0: #000000;
+  --bg-1: #020403;
+  --bg-2: #07100a;
+  --bg-3: #0d1c12;
+  --border-subtle: #102219;
+  --border: #1b3a27;
+  --border-strong: #2e6640;
+  --text-primary: #e7ffe9;
+  --text-secondary: #a5c8ab;
+  --text-tertiary: #66856d;
+  --accent: #72f542;
+  --accent-hover: #9dff70;
+  --accent-dim: #183d20;
+  --accent-text-on: #031006;
+  --success: #72f542;
+  --warning: #e6c84c;
+  --danger: #ff5d6c;
+  --danger-dim: #42151b;
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }

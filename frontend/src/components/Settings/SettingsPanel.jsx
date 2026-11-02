@@ -133,6 +133,10 @@ export default function SettingsPanel() {
             <select className="input" value={prefs.theme} onChange={(e) => save({ theme: e.target.value })}>
               <option value="dark">Dark</option>
               <option value="amoled">AMOLED black</option>
+              <option value="light">Light</option>
+              <option value="github">GitHub</option>
+              <option value="catppuccin">Catppuccin</option>
+              <option value="godzilla">AMOLED Godzilla</option>
             </select>
           </div>
 
