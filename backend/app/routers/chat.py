@@ -59,6 +59,8 @@ ARTIFACT_COMMANDS = {
     "photo": re.compile(r"^\s*/photo(?:\s+|$)", re.IGNORECASE),
     "video": re.compile(r"^\s*/video(?:\s+|$)", re.IGNORECASE),
 }
+GENERATED_FILE_HEADER = re.compile(r"^\s*(?:===\s*)?FILE\s*:\s*(.+?)\s*(?:===)?\s*$", re.IGNORECASE)
+GENERATED_FILE_END = re.compile(r"^\s*(?:===\s*)?END\s+FILE\s*(?:===)?\s*$", re.IGNORECASE)
 
 RESPONSE_FORMAT_SYSTEM_PROMPT = """\
 You are Nexus AI. Return a complete, polished answer that preserves every
@@ -141,6 +143,44 @@ def _create_project_zip() -> tuple[str, str]:
                 except OSError:
                     logger.warning("Skipping unreadable project file while creating ZIP: %s", path)
     return token, archive.name
+
+
+def _parse_generated_files(text: str) -> dict[str, str]:
+    files: dict[str, str] = {}
+    current_path: str | None = None
+    current_lines: list[str] = []
+    for line in text.splitlines():
+        header = GENERATED_FILE_HEADER.match(line)
+        if header:
+            if current_path:
+                files[current_path] = "\n".join(current_lines).strip() + "\n"
+            current_path = header.group(1).strip().strip("`")
+            current_lines = []
+            continue
+        if current_path and GENERATED_FILE_END.match(line):
+            files[current_path] = "\n".join(current_lines).strip() + "\n"
+            current_path = None
+            current_lines = []
+            continue
+        if current_path:
+            current_lines.append(line)
+    if current_path:
+        files[current_path] = "\n".join(current_lines).strip() + "\n"
+    return files
+
+
+def _create_generated_project_zip(files: dict[str, str]) -> str:
+    token = uuid.uuid4().hex
+    archive = ARTIFACT_ROOT / f"{token}.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
+        for raw_path, content in files.items():
+            path = Path(raw_path.replace("\\", "/"))
+            if path.is_absolute() or ".." in path.parts or not path.parts:
+                continue
+            if path.name.startswith(".env") or any(part in {".git", "__pycache__", "node_modules"} for part in path.parts):
+                continue
+            output.writestr(str(path), content)
+    return archive.name
 
 
 @router.get("/artifacts/{artifact_name}")
@@ -253,9 +293,14 @@ async def chat_completions(
         chat_messages.insert(0, ChatMessage(
             role="system",
             content=(
-                "The user requested a downloadable project archive. A real ZIP artifact will "
-                "be attached separately; briefly describe what it contains and do not fabricate "
-                "a link."
+                "The user requested a newly generated project as a downloadable ZIP. Generate the "
+                "complete project now, not a description. Return every file using exactly this format:\n"
+                "FILE: relative/path/to/file\n"
+                "<complete file contents>\n"
+                "END FILE\n"
+                "Repeat for every required file. Use relative safe paths only. Include a README and "
+                "all source/config files needed to run the project. Do not wrap the file blocks in "
+                "Markdown fences, do not omit implementation details, and do not include secrets."
             ),
         ))
 
@@ -367,20 +412,44 @@ async def chat_completions(
 
         try:
             if artifact_kind == "zip":
-                yield _sse({"type": "artifact_status", "kind": "zip", "status": "building", "detail": "Preparing the codebase archive…"})
-                _, artifact_name = await asyncio.to_thread(_create_project_zip)
-                download_path = f"/api/v1/chat/artifacts/{artifact_name}"
-                assembled = (
-                    "Your project ZIP is ready to download.\n\n"
-                    f"[Download project ZIP]({download_path})"
-                )
-                yield _sse({"type": "delta", "content": assembled})
-                yield _sse({
-                    "type": "artifact",
-                    "kind": "zip",
-                    "name": "nexus-ai-project.zip",
-                    "download_url": download_path,
-                })
+                yield _sse({"type": "artifact_status", "kind": "zip", "status": "generating", "detail": "Generating the project code…"})
+                generated_parts: list[str] = []
+                generation_messages = [
+                    *chat_messages,
+                    ChatMessage(role="user", content=payload.message),
+                ]
+                async for chunk in adapter.stream_chat(provider_model_id, generation_messages):
+                    if chunk.error:
+                        error_text = chunk.error
+                        yield _sse({"type": "error", "message": chunk.error})
+                        break
+                    if chunk.delta:
+                        generated_parts.append(chunk.delta)
+                        assembled += chunk.delta
+                        yield _sse({"type": "delta", "content": chunk.delta})
+                    if chunk.done:
+                        break
+                generated_text = "".join(generated_parts)
+                generated_files = _parse_generated_files(generated_text)
+                if not generated_files:
+                    error_text = "The model did not return files in the required project format."
+                    yield _sse({"type": "error", "message": error_text})
+                else:
+                    yield _sse({"type": "artifact_status", "kind": "zip", "status": "building", "detail": f"Packaging {len(generated_files)} generated files…"})
+                    artifact_name = await asyncio.to_thread(_create_generated_project_zip, generated_files)
+                    download_path = f"/api/v1/chat/artifacts/{artifact_name}"
+                    download_message = (
+                        f"\n\nGenerated {len(generated_files)} project files. "
+                        f"[Download generated project ZIP]({download_path})"
+                    )
+                    assembled += download_message
+                    yield _sse({"type": "delta", "content": download_message})
+                    yield _sse({
+                        "type": "artifact",
+                        "kind": "zip",
+                        "name": "generated-project.zip",
+                        "download_url": download_path,
+                    })
             elif artifact_kind in {"photo", "video"}:
                 assembled = (
                     f"/{artifact_kind} was recognized. This installation currently supports "

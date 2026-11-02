@@ -131,7 +131,7 @@ function WebSources({ sources }) {
 }
 
 function persistedArtifact(content) {
-  const match = content?.match(/\[Download project ZIP\]\(([^)]+)\)/);
+  const match = content?.match(/\[Download (?:project|generated project) ZIP\]\(([^)]+)\)/i);
   if (!match) return null;
   return {
     name: "nexus-ai-project.zip",
@@ -267,7 +267,7 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
         <div key={m.id} className={`msg-row ${m.role}`}>
           {(() => {
             const artifact = m.artifact || persistedArtifact(m.content);
-            const renderedContent = m.content?.replace(/\n*\[Download project ZIP\]\([^)]+\)/, "") || "";
+                      const renderedContent = m.content?.replace(/\n*\[Download (?:project|generated project) ZIP\]\([^)]+\)/i, "") || "";
             return (
               <>
           {m.role === "assistant" && (
