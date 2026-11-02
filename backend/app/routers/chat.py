@@ -115,39 +115,6 @@ def _artifact_command(message: str) -> tuple[str | None, str]:
     return None, message
 
 
-def _create_project_zip() -> tuple[str, str]:
-    token = uuid.uuid4().hex
-    archive = ARTIFACT_ROOT / f"{token}.zip"
-    excluded = {
-        ".git", "node_modules", "dist", "__pycache__", ".pytest_cache", "uploads",
-        ".venv", "venv", "env", "proc", "sys", "dev", "tmp",
-    }
-    root = PROJECT_ROOT.resolve()
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
-        for current, directories, filenames in os.walk(root, topdown=True, followlinks=False):
-            directories[:] = [
-                name for name in directories
-                if name not in excluded and not (Path(current) / name).is_symlink()
-            ]
-            for filename in filenames:
-                path = Path(current) / filename
-                if path.is_symlink():
-                    continue
-                relative = path.relative_to(root)
-                if (
-                    any(part in excluded for part in relative.parts)
-                    or filename == ".env"
-                    or filename.startswith(".env.")
-                    or path.suffix in {".db", ".sqlite", ".sqlite3"}
-                ):
-                    continue
-                try:
-                    output.write(path, relative)
-                except OSError:
-                    logger.warning("Skipping unreadable project file while creating ZIP: %s", path)
-    return token, archive.name
-
-
 def _parse_generated_files(text: str) -> dict[str, str]:
     files: dict[str, str] = {}
     markers = list(re.finditer(r"(?im)^\s*FILE\s*:\s*", text))
@@ -181,12 +148,25 @@ def _parse_generated_files(text: str) -> dict[str, str]:
 def _format_generated_files(files: dict[str, str]) -> str:
     sections = ["## Generated project files"]
     for path, content in files.items():
+        filename = Path(path).name.lower()
         suffix = Path(path).suffix.lower()
         language = {
-            ".py": "python", ".js": "javascript", ".jsx": "jsx", ".ts": "typescript",
-            ".tsx": "tsx", ".html": "html", ".css": "css", ".json": "json",
-            ".md": "markdown", ".yml": "yaml", ".yaml": "yaml", ".sh": "bash",
-        }.get(suffix, "")
+            ".py": "python", ".pyw": "python",
+            ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript",
+            ".jsx": "jsx", ".ts": "typescript", ".tsx": "tsx",
+            ".java": "java", ".kt": "kotlin", ".go": "go", ".rs": "rust",
+            ".c": "c", ".h": "c", ".cpp": "cpp", ".cs": "csharp",
+            ".php": "php", ".rb": "ruby", ".swift": "swift",
+            ".html": "html", ".htm": "html", ".css": "css", ".scss": "scss",
+            ".less": "less", ".json": "json", ".jsonc": "json",
+            ".xml": "xml", ".svg": "xml", ".md": "markdown",
+            ".yml": "yaml", ".yaml": "yaml", ".toml": "toml",
+            ".ini": "ini", ".env": "dotenv", ".sh": "bash", ".bash": "bash",
+            ".sql": "sql", ".graphql": "graphql", ".vue": "vue", ".svelte": "svelte",
+        }.get(suffix, {
+            "dockerfile": "dockerfile",
+            "makefile": "makefile",
+        }.get(filename, "text"))
         sections.append(f"### `{path}`\n\n```{language}\n{content.rstrip()}\n```")
     return "\n\n".join(sections)
 
@@ -246,7 +226,7 @@ def download_artifact(
         raise HTTPException(status_code=404, detail="Artifact expired or not found")
     if path.suffix == ".md":
         return FileResponse(path, media_type="text/markdown", filename="README.md")
-    return FileResponse(path, media_type="application/zip", filename="nexus-ai-project.zip")
+    return FileResponse(path, media_type="application/zip", filename="generated-project.zip")
 
 
 async def _collect_provider_response(adapter, model_id: str, messages: list[ChatMessage]) -> str:
@@ -479,7 +459,9 @@ async def chat_completions(
                             "END FILE\n\n"
                             f"Project request: {artifact_request or payload.message}\n"
                             "Do not answer conversationally, do not use Markdown fences, and do not "
-                            "summarize instead of returning files."
+                            "summarize instead of returning files. Preserve every source line break, "
+                            "indentation level, blank line, quote, brace, and template delimiter. "
+                            "Never put an entire source file on one line."
                         ),
                     ),
                 ]

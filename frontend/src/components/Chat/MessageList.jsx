@@ -138,7 +138,7 @@ function persistedArtifact(content) {
     const url = match[1] || match[2];
     const isReadme = Boolean(match[2]);
     return {
-      name: isReadme ? "README.md" : "nexus-ai-project.zip",
+      name: isReadme ? "README.md" : "generated-project.zip",
       download_url: url.startsWith("http") ? url : `${API_BASE_URL}${url}`,
     };
   });

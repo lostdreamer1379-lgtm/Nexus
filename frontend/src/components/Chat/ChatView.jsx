@@ -281,7 +281,7 @@ export default function ChatView({ onConversationChange }) {
               const next = [...prev];
               const last = next[next.length - 1];
               if (last?.role === "assistant" && !last.content) {
-                next[next.length - 1] = { ...last, content: event.detail || "Preparing the codebase archive…" };
+                next[next.length - 1] = { ...last, content: event.detail || "Preparing the generated project…" };
               }
               return next;
             });
