@@ -217,6 +217,7 @@ async def chat_completions(
             "type": "start",
             "conversation_id": conversation_id,
             "model_display_name": model_display_name,
+            "memory_used": bool(approved_memories),
         }
         # Send retrieved chunks to the client for citation display
         if rag_chunks:

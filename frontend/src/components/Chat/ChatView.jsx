@@ -190,6 +190,7 @@ export default function ChatView({ onConversationChange }) {
             emitTelemetry({ kind: "system", node: "router", title: "Request routed", detail: event.model_display_name || "Selecting model", status: "running" });
             if (event.rag_chunks?.length) emitTelemetry({ kind: "retrieval", node: "knowledge", title: "Knowledge retrieved", detail: `${event.rag_chunks.length} relevant chunks`, status: "complete" });
             if (event.web_sources?.length) emitTelemetry({ kind: "web", node: "web", title: "Web sources found", detail: `${event.web_sources.length} live sources`, status: "complete" });
+            if (event.memory_used) emitTelemetry({ kind: "memory", node: "memory", title: "Memory context loaded", detail: "Approved memories added to the model context", status: "complete" });
             resolvedConversationId = event.conversation_id;
             activeConversationIdRef.current = event.conversation_id;
             markConversationActive(event.conversation_id, {

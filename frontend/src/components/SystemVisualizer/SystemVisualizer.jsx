@@ -88,13 +88,15 @@ export default function SystemVisualizer() {
     const sequence = routeEvents.length
       ? routeEvents
       : events.filter((event) => event.node && now - event.timestamp < 2600);
-    sequence.filter((event) => event.node).forEach((event, index, nodeEvents) => {
-      const previous = nodeEvents[index - 1];
-      if (!previous?.node || previous.node === event.node) return;
-      const forward = `${previous.node}-${event.node}`;
-      const reverse = `${event.node}-${previous.node}`;
-      if (LINKS.some(([from, to]) => `${from}-${to}` === forward)) links.add(forward);
-      else if (LINKS.some(([from, to]) => `${from}-${to}` === reverse)) links.add(reverse);
+    const nodes = new Set(sequence.filter((event) => event.node).map((event) => event.node));
+    if (nodes.has("input") && nodes.has("router")) links.add("input-router");
+    if (nodes.has("router") && nodes.has("model")) links.add("router-model");
+    if (nodes.has("model") && nodes.has("output")) links.add("model-output");
+    ["memory", "knowledge", "web"].forEach((source) => {
+      if (nodes.has(source)) {
+        links.add(`router-${source}`);
+        links.add(`${source}-model`);
+      }
     });
     return links;
   }, [events, now, routeEvents]);
