@@ -88,25 +88,25 @@
 }
 
 :root[data-theme="github"] {
-  --bg-0: #f6f8fa;
-  --bg-1: #ffffff;
-  --bg-2: #f6f8fa;
-  --bg-3: #eaeef2;
-  --border-subtle: #d8dee4;
-  --border: #afb8c1;
-  --border-strong: #8c959f;
-  --text-primary: #1f2328;
-  --text-secondary: #59636e;
-  --text-tertiary: #656d76;
-  --accent: #0969da;
-  --accent-hover: #0550ae;
-  --accent-dim: #ddf4ff;
-  --accent-text-on: #ffffff;
-  --success: #1a7f37;
-  --warning: #9a6700;
-  --danger: #cf222e;
-  --danger-dim: #ffebe9;
-  color-scheme: light;
+  --bg-0: #000000;
+  --bg-1: #050805;
+  --bg-2: #0a110b;
+  --bg-3: #122016;
+  --border-subtle: #132617;
+  --border: #204226;
+  --border-strong: #36723e;
+  --text-primary: #effff0;
+  --text-secondary: #afd5b1;
+  --text-tertiary: #709873;
+  --accent: #39ff14;
+  --accent-hover: #70ff52;
+  --accent-dim: #16451c;
+  --accent-text-on: #001000;
+  --success: #39ff14;
+  --warning: #d6c94c;
+  --danger: #ff6870;
+  --danger-dim: #40151a;
+  color-scheme: dark;
 }
 
 :root[data-theme="catppuccin"] {
@@ -134,22 +134,22 @@
 :root[data-theme="godzilla"] {
   --bg-0: #000000;
   --bg-1: #020403;
-  --bg-2: #07100a;
-  --bg-3: #0d1c12;
-  --border-subtle: #102219;
-  --border: #1b3a27;
-  --border-strong: #2e6640;
-  --text-primary: #e7ffe9;
-  --text-secondary: #a5c8ab;
-  --text-tertiary: #66856d;
-  --accent: #72f542;
-  --accent-hover: #9dff70;
-  --accent-dim: #183d20;
-  --accent-text-on: #031006;
-  --success: #72f542;
+  --bg-2: #050914;
+  --bg-3: #0c1629;
+  --border-subtle: #101c34;
+  --border: #1b3764;
+  --border-strong: #2e5da3;
+  --text-primary: #eaf4ff;
+  --text-secondary: #a7c9ef;
+  --text-tertiary: #6d8eb8;
+  --accent: #29b6ff;
+  --accent-hover: #66d0ff;
+  --accent-dim: #123b61;
+  --accent-text-on: #001018;
+  --success: #4de1ff;
   --warning: #e6c84c;
-  --danger: #ff5d6c;
-  --danger-dim: #42151b;
+  --danger: #ff5d83;
+  --danger-dim: #42152a;
   color-scheme: dark;
 }
 

@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { api } from "../../api/client";
 import { applyTheme } from "../../utils/theme.js";
+import { THEME_OPTIONS } from "../../utils/theme.js";
 import { emitSystemEvent } from "../../utils/systemEvents.js";
+import { Check, ChevronDown } from "lucide-react";
 
 export default function SettingsPanel() {
   const { user, logout, deleteAccount } = useAuth();
@@ -15,6 +17,7 @@ export default function SettingsPanel() {
   const [refiningMemories, setRefiningMemories] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [themeOpen, setThemeOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([api.get("/api/v1/settings"), api.get("/api/v1/models?enabled_only=true")]).then(([p, m]) => {
@@ -119,6 +122,34 @@ export default function SettingsPanel() {
         .account-row { display: flex; justify-content: space-between; font-size: 14px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
         .account-row:last-child { border-bottom: none; }
         .account-row span:first-child { color: var(--text-secondary); }
+        .theme-selector { position: relative; }
+        .theme-trigger {
+          width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+          min-height: 42px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md);
+          background: var(--bg-2); color: var(--text-primary); cursor: pointer; font-size: 14px;
+          transition: border-color .18s ease, background-color .18s ease;
+        }
+        .theme-trigger:hover, .theme-trigger.active { border-color: var(--accent); background: var(--bg-3); }
+        .theme-trigger svg { color: var(--text-tertiary); transition: transform .18s ease; }
+        .theme-trigger.active svg { transform: rotate(180deg); color: var(--accent); }
+        .theme-menu {
+          position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 8px);
+          padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-md);
+          background: var(--bg-2); box-shadow: 0 18px 45px rgba(0,0,0,.42);
+          transform-origin: top center; animation: theme-menu-in .18s ease-out;
+        }
+        .theme-option {
+          width: 100%; display: flex; align-items: center; justify-content: space-between;
+          min-height: 38px; padding: 8px 10px; border: 0; border-radius: var(--radius-sm);
+          background: transparent; color: var(--text-secondary); cursor: pointer; text-align: left; font-size: 13px;
+          transition: background-color .14s ease, color .14s ease;
+        }
+        .theme-option:hover, .theme-option.selected { background: var(--accent-dim); color: var(--text-primary); }
+        .theme-option.selected svg { color: var(--accent); }
+        @keyframes theme-menu-in {
+          from { opacity: 0; transform: translateY(-6px) scale(.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
       `}</style>
       <div className="page-inner">
         <div className="page-header">
@@ -130,14 +161,38 @@ export default function SettingsPanel() {
           <h2>Appearance</h2>
           <div className="field">
             <label>Theme</label>
-            <select className="input" value={prefs.theme} onChange={(e) => save({ theme: e.target.value })}>
-              <option value="dark">Dark</option>
-              <option value="amoled">AMOLED black</option>
-              <option value="light">Light</option>
-              <option value="github">GitHub</option>
-              <option value="catppuccin">Catppuccin</option>
-              <option value="godzilla">AMOLED Godzilla</option>
-            </select>
+            <div className="theme-selector">
+              <button
+                type="button"
+                className={`theme-trigger ${themeOpen ? "active" : ""}`}
+                onClick={() => setThemeOpen((value) => !value)}
+                aria-expanded={themeOpen}
+                aria-haspopup="listbox"
+              >
+                <span>{THEME_OPTIONS.find(([value]) => value === prefs.theme)?.[1] || "Dark"}</span>
+                <ChevronDown size={16} />
+              </button>
+              {themeOpen && (
+                <div className="theme-menu" role="listbox" aria-label="Theme options">
+                  {THEME_OPTIONS.map(([value, label]) => (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={prefs.theme === value}
+                      key={value}
+                      className={`theme-option ${prefs.theme === value ? "selected" : ""}`}
+                      onClick={() => {
+                        save({ theme: value });
+                        setThemeOpen(false);
+                      }}
+                    >
+                      <span>{label}</span>
+                      {prefs.theme === value && <Check size={15} />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="settings-section card">

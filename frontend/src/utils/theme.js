@@ -6,3 +6,12 @@ export function applyTheme(theme) {
     delete document.documentElement.dataset.theme;
   }
 }
+
+export const THEME_OPTIONS = [
+  ["dark", "Dark"],
+  ["amoled", "AMOLED black"],
+  ["light", "Light"],
+  ["github", "GitHub"],
+  ["catppuccin", "Catppuccin"],
+  ["godzilla", "AMOLED Godzilla"],
+];
