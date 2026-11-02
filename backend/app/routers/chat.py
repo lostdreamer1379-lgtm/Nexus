@@ -503,8 +503,9 @@ async def chat_completions(
                         _create_readme_artifact,
                         formatted_files,
                     )
+                    zip_files = {**generated_files, "README.md": formatted_files}
                     yield _sse({"type": "artifact_status", "kind": "zip", "status": "building", "detail": f"Packaging {len(generated_files)} generated files…"})
-                    artifact_name = await asyncio.to_thread(_create_generated_project_zip, generated_files)
+                    artifact_name = await asyncio.to_thread(_create_generated_project_zip, zip_files)
                     download_path = f"/api/v1/chat/artifacts/{artifact_name}"
                     readme_path = f"/api/v1/chat/artifacts/{readme_name}"
                     download_message = (

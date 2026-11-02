@@ -131,12 +131,17 @@ function WebSources({ sources }) {
 }
 
 function persistedArtifact(content) {
-  const match = content?.match(/\[Download (?:project|generated project) ZIP\]\(([^)]+)\)/i);
-  if (!match) return null;
-  return {
-    name: "nexus-ai-project.zip",
-    download_url: match[1].startsWith("http") ? match[1] : `${API_BASE_URL}${match[1]}`,
-  };
+  const matches = [...(content || "").matchAll(
+    /\[Download (?:project|generated project) ZIP\]\(([^)]+)\)|\[Download README\.md\]\(([^)]+)\)/gi
+  )];
+  return matches.map((match) => {
+    const url = match[1] || match[2];
+    const isReadme = Boolean(match[2]);
+    return {
+      name: isReadme ? "README.md" : "nexus-ai-project.zip",
+      download_url: url.startsWith("http") ? url : `${API_BASE_URL}${url}`,
+    };
+  });
 }
 
 export default function MessageList({ messages, streaming, onRegenerate, onSaveMemory, savingMemory, savedMemoryIds }) {
@@ -266,9 +271,12 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
       {messages.map((m, i) => (
         <div key={m.id} className={`msg-row ${m.role}`}>
           {(() => {
-            const artifact = m.artifact || persistedArtifact(m.content);
-            const artifacts = m.artifacts || (artifact ? [artifact] : []);
-                      const renderedContent = m.content?.replace(/\n*\[Download (?:project|generated project) ZIP\]\([^)]+\)/i, "") || "";
+            const persisted = persistedArtifact(m.content);
+            const artifact = m.artifact || persisted[0];
+            const artifacts = m.artifacts || persisted;
+            const renderedContent = m.content
+              ?.replace(/\n*\[Download (?:project|generated project) ZIP\]\([^)]+\)/gi, "")
+              .replace(/\n*\[Download README\.md\]\([^)]+\)/gi, "") || "";
             return (
               <>
           {m.role === "assistant" && (
