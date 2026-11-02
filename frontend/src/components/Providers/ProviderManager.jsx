@@ -3,12 +3,15 @@ import { Plus, Plug } from "lucide-react";
 import { api } from "../../api/client";
 import ProviderCard from "./ProviderCard.jsx";
 import AddProviderModal from "./AddProviderModal.jsx";
+import RegisterModelModal from "../Models/RegisterModelModal.jsx";
 
 export default function ProviderManager() {
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingConnection, setEditingConnection] = useState(null);
+  const [showModelModal, setShowModelModal] = useState(false);
+  const [actionError, setActionError] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -40,6 +43,16 @@ export default function ProviderManager() {
     setConnections((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   };
 
+  const handleRefreshModels = async (connection) => {
+    setActionError(null);
+    try {
+      await api.post(`/api/v1/providers/connections/${connection.id}/models/refresh`);
+      await load();
+    } catch (err) {
+      setActionError(err?.message || "Model capability discovery failed.");
+    }
+  };
+
   return (
     <div className="page">
       <style>{`
@@ -56,10 +69,17 @@ export default function ProviderManager() {
             <h1>Provider Manager</h1>
             <p>Connect your own API keys. Each connection stays private to your account.</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            <Plus size={16} /> Add provider
-          </button>
+          <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+            <button className="btn" onClick={() => setShowModelModal(true)} disabled={connections.length === 0}>
+              Add single model
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+              <Plus size={16} /> Add provider
+            </button>
+          </div>
         </div>
+
+        {actionError && <p className="error-text">{actionError}</p>}
 
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "var(--space-6)" }}>
@@ -82,6 +102,7 @@ export default function ProviderManager() {
                 connection={c}
                 onDelete={() => handleDelete(c)}
                 onTest={() => handleTest(c)}
+                onRefreshModels={() => handleRefreshModels(c)}
                 onEdit={() => setEditingConnection(c)}
               />
             ))}
@@ -107,6 +128,14 @@ export default function ProviderManager() {
             setConnections((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
             setEditingConnection(null);
           }}
+        />
+      )}
+
+      {showModelModal && (
+        <RegisterModelModal
+          connections={connections}
+          onClose={() => setShowModelModal(false)}
+          onRegistered={() => setShowModelModal(false)}
         />
       )}
     </div>

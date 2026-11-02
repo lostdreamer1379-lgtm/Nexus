@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RefreshCw, Pencil, Trash2 } from "lucide-react";
+import { RefreshCw, Pencil, Trash2, SearchCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const PROVIDER_LABELS = {
@@ -21,8 +21,9 @@ const STATUS_META = {
   provider_unavailable: { label: "Provider unavailable", className: "badge-danger" },
 };
 
-export default function ProviderCard({ connection, onDelete, onTest, onEdit }) {
+export default function ProviderCard({ connection, onDelete, onTest, onRefreshModels, onEdit }) {
   const [testing, setTesting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const status = STATUS_META[connection.connection_status] || STATUS_META.unverified;
 
   const runTest = async () => {
@@ -31,6 +32,15 @@ export default function ProviderCard({ connection, onDelete, onTest, onEdit }) {
       await onTest();
     } finally {
       setTesting(false);
+    }
+  };
+
+  const runRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await onRefreshModels();
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -57,6 +67,9 @@ export default function ProviderCard({ connection, onDelete, onTest, onEdit }) {
         {connection.last_error && <p className="pc-error">{connection.last_error}</p>}
       </div>
       <div className="pc-actions">
+        <button className="btn btn-ghost" onClick={runRefresh} title="Rerun model capability discovery" disabled={refreshing}>
+          {refreshing ? <span className="spinner" /> : <SearchCheck size={15} />} Discover models
+        </button>
         <button className="btn btn-ghost btn-icon" onClick={runTest} title="Test connection" disabled={testing}>
           {testing ? <span className="spinner" /> : <RefreshCw size={15} />}
         </button>

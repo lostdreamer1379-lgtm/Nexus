@@ -59,8 +59,7 @@ export default function RegisterModelModal({ connections, onClose, onRegistered 
               required
             />
             <span className="field-hint">
-              Use the exact ID your provider expects. Check the provider&apos;s current documentation — model IDs
-              change over time and this isn&apos;t validated until your first chat message.
+            Use the exact model ID allowed by this provider API. It will be added to your Model Library immediately.
             </span>
           </div>
 

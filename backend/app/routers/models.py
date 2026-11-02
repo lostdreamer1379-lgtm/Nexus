@@ -80,6 +80,26 @@ def update_model(model_id: str, payload: UserModelUpdate, current_user: User = D
     return model
 
 
+@router.post("/bulk-toggle", response_model=list[UserModelOut])
+def bulk_toggle_models(
+    enabled: bool,
+    model_ids: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ids = [item for item in (model_ids or "").split(",") if item]
+    query = db.query(UserModel).filter(UserModel.user_id == current_user.id)
+    if ids:
+        query = query.filter(UserModel.id.in_(ids))
+    models = query.all()
+    for model in models:
+        model.enabled = enabled
+    db.commit()
+    for model in models:
+        db.refresh(model)
+    return models
+
+
 @router.delete("/{model_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_model(model_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     model = _get_owned_model(db, model_id, current_user)

@@ -12,7 +12,7 @@ function formatPrice(value) {
   return `$${value.toFixed(2)} / 1M tokens`;
 }
 
-export default function ModelCard({ model, connectionName, onToggle, onRemove, onRename }) {
+export default function ModelCard({ model, connectionName, onToggle, onRemove, onRename, groups = [], groupId, onGroupChange }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(model.display_name);
   const pricing = PRICING_META[model.pricing_tier] || PRICING_META.unknown;
@@ -33,6 +33,7 @@ export default function ModelCard({ model, connectionName, onToggle, onRemove, o
         .mc-name { font-size: 15px; font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .mc-meta { font-size: 12.5px; color: var(--text-tertiary); margin: 0 0 8px; }
         .mc-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+        .mc-group-select { margin-top: 10px; max-width: 220px; font-size: 12px; padding: 5px 8px; }
         .mc-rename-input { font-size: 15px; font-weight: 600; background: var(--bg-2); border: 1px solid var(--accent); border-radius: 4px; padding: 2px 6px; color: var(--text-primary); }
         .mc-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
         .switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
@@ -101,6 +102,12 @@ export default function ModelCard({ model, connectionName, onToggle, onRemove, o
             </span>
           )}
         </div>
+        {onGroupChange && (
+          <select className="input mc-group-select" value={groupId || ""} onChange={(e) => onGroupChange(e.target.value)}>
+            <option value="">Unassigned</option>
+            {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+          </select>
+        )}
       </div>
 
       <div className="mc-actions">
