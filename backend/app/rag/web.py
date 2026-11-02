@@ -80,7 +80,7 @@ class _SearchParser(HTMLParser):
             self._title += " ".join(data.split())
 
 
-async def search_web(query: str, limit: int = 3) -> list[WebResult]:
+async def search_web(query: str, limit: int = 5) -> list[WebResult]:
     headers = {"User-Agent": "NexusAI/1.0 (+web-rag)"}
     search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True, headers=headers) as client:
@@ -105,4 +105,6 @@ async def search_web(query: str, limit: int = 3) -> list[WebResult]:
                     results.append(WebResult(title=title, url=url, content=content))
             except (httpx.HTTPError, ValueError):
                 continue
+            if len(results) >= limit:
+                break
     return results

@@ -67,7 +67,7 @@ async def embed_texts(
                     resp = await client.post(url, json=payload)
                 else:
                     url = base_url.rstrip("/") + "/embeddings"
-                    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+                    headers = {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}
                     payload = {"model": model_id, "input": batch}
                     resp = await client.post(url, headers=headers, json=payload)
             except httpx.RequestError as exc:
@@ -138,12 +138,13 @@ def top_k_chunks(
     Return (chunk_id, score) pairs for the top-k most similar chunks.
     chunk_blobs are base64-encoded float32 byte strings (from the DB).
     """
-    scored: list[tuple[str, float]] = []
-    for cid, blob in zip(chunk_ids, chunk_blobs):
-        if not blob:
-            continue
-        vec = blob_to_vec(blob)
-        score = cosine_similarity(query_vec, vec)
-        scored.append((cid, score))
-    scored.sort(key=lambda x: x[1], reverse=True)
-    return scored[:k]
+    valid = [(cid, blob) for cid, blob in zip(chunk_ids, chunk_blobs) if blob]
+    if not valid:
+        return []
+    ids, blobs = zip(*valid)
+    vectors = np.stack([blob_to_vec(blob) for blob in blobs])
+    scores = vectors @ query_vec
+    limit = min(max(k, 1), len(ids))
+    top_indices = np.argpartition(scores, -limit)[-limit:]
+    top_indices = top_indices[np.argsort(scores[top_indices])[::-1]]
+    return [(ids[index], float(scores[index])) for index in top_indices]
