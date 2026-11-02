@@ -71,6 +71,7 @@ def test_discover_models_refresh(client, registered_user):
 
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) == 1
-    assert data[0]["pricing_tier"] == "free"
-    assert data[0]["enabled"] is False  # discovered models start disabled until the user selects them
+    assert len(data["models"]) == 1
+    assert data["models"][0]["pricing_tier"] == "free"
+    assert data["models"][0]["enabled"] is False  # discovered models start disabled until the user selects them
+    assert data["verified"] == 1

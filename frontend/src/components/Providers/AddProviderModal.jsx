@@ -23,6 +23,7 @@ export default function AddProviderModal({ onClose, onCreated, editing }) {
   const [savedConnection, setSavedConnection] = useState(null);
   const [discovering, setDiscovering] = useState(false);
   const [discovered, setDiscovered] = useState(null); // null = not attempted yet
+  const [discoverySummary, setDiscoverySummary] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const selectAllRef = useRef(null);
 
@@ -59,10 +60,12 @@ export default function AddProviderModal({ onClose, onCreated, editing }) {
       setSavedConnection(conn);
       setDiscovering(true);
       try {
-        const models = await api.post(`/api/v1/providers/connections/${conn.id}/models/refresh`);
-        setDiscovered(models);
-      } catch {
-        setDiscovered([]); // discovery unsupported or failed — user can register manually in Model Library
+        const result = await api.post(`/api/v1/providers/connections/${conn.id}/models/refresh`);
+        setDiscoverySummary(result);
+        setDiscovered(result.models);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Rigorous model verification failed.");
+        setDiscovered([]);
       } finally {
         setDiscovering(false);
       }
@@ -115,6 +118,12 @@ export default function AddProviderModal({ onClose, onCreated, editing }) {
             </div>
           ) : discovered && discovered.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 360, overflowY: "auto", marginBottom: "var(--space-4)" }}>
+              {discoverySummary && (
+                <div className="card" style={{ marginBottom: 8, color: "var(--text-secondary)" }}>
+                  <strong style={{ color: "var(--text-primary)" }}>Verification complete</strong>
+                  <p style={{ margin: "5px 0 0", fontSize: 13 }}>{discoverySummary.message}</p>
+                </div>
+              )}
               {discovered.map((m) => (
                 <label key={m.id} className="model-pick-row">
                   <input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => toggleModel(m.id)} />
@@ -142,10 +151,7 @@ export default function AddProviderModal({ onClose, onCreated, editing }) {
               `}</style>
             </div>
           ) : (
-            <p style={{ color: "var(--text-secondary)", fontSize: 14, marginBottom: "var(--space-4)" }}>
-              This provider doesn&apos;t support automatic model discovery (or none were returned). You can register a
-              specific model ID manually from the Model Library.
-            </p>
+            <p className="error-text">{error || "No usable models passed rigorous verification."}</p>
           )}
           <div style={{ display: "flex", gap: "var(--space-2)", justifyContent: "flex-end" }}>
             <button className="btn" onClick={() => onCreated(savedConnection)}>

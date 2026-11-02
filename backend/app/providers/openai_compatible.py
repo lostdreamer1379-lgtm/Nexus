@@ -57,6 +57,9 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             "Content-Type": "application/json",
         }
 
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+
     def _models_url(self) -> str:
         return f"{self.base_url.rstrip('/')}/models"
 

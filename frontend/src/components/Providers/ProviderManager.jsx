@@ -12,6 +12,7 @@ export default function ProviderManager() {
   const [editingConnection, setEditingConnection] = useState(null);
   const [showModelModal, setShowModelModal] = useState(false);
   const [actionError, setActionError] = useState(null);
+  const [discoverySummary, setDiscoverySummary] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -46,7 +47,11 @@ export default function ProviderManager() {
   const handleRefreshModels = async (connection) => {
     setActionError(null);
     try {
-      await api.post(`/api/v1/providers/connections/${connection.id}/models/refresh`);
+      const summary = await api.post(`/api/v1/providers/connections/${connection.id}/models/refresh`);
+      setDiscoverySummary({
+        connectionName: connection.connection_name,
+        ...summary,
+      });
       await load();
     } catch (err) {
       setActionError(err?.message || "Model capability discovery failed.");
@@ -80,6 +85,14 @@ export default function ProviderManager() {
         </div>
 
         {actionError && <p className="error-text">{actionError}</p>}
+        {discoverySummary && (
+          <div className="card" style={{ marginBottom: "var(--space-4)", borderColor: "var(--accent)" }}>
+            <strong>Model verification complete for {discoverySummary.connectionName}</strong>
+            <p style={{ margin: "5px 0 0", color: "var(--text-secondary)", fontSize: 13 }}>
+              {discoverySummary.message}
+            </p>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "var(--space-6)" }}>

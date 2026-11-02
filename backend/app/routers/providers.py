@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -18,6 +19,14 @@ from app.schemas import (
 from app.security import encrypt_secret
 
 router = APIRouter(prefix="/api/v1/providers", tags=["providers"])
+
+
+class ModelDiscoverySummary(BaseModel):
+    models: list[UserModelOut]
+    added: list[str]
+    removed: list[str]
+    verified: int
+    message: str
 
 
 @router.get("", response_model=list[str])
@@ -157,7 +166,7 @@ async def test_connection(connection_id: str, current_user: User = Depends(get_c
     return conn
 
 
-@router.post("/connections/{connection_id}/models/refresh", response_model=list[UserModelOut])
+@router.post("/connections/{connection_id}/models/refresh", response_model=ModelDiscoverySummary)
 async def refresh_models(connection_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     conn = _get_owned_connection(db, connection_id, current_user)
 
@@ -170,6 +179,11 @@ async def refresh_models(connection_id: str, current_user: User = Depends(get_cu
         db.add(conn)
         db.commit()
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
+    if not discovered:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Rigorous model verification returned no usable models. Existing models were left unchanged.",
+        )
 
     now = datetime.now(timezone.utc)
     existing_by_pid = {
@@ -177,8 +191,22 @@ async def refresh_models(connection_id: str, current_user: User = Depends(get_cu
         for m in db.query(UserModel).filter(UserModel.connection_id == conn.id).all()
     }
 
+    discovered_by_pid = {
+        dm.provider_model_id: dm
+        for dm in discovered
+        if dm.provider_model_id and dm.provider_model_id.strip()
+    }
+    removed_models = [
+        model for pid, model in existing_by_pid.items()
+        if pid not in discovered_by_pid
+    ]
+    removed_names = [model.display_name for model in removed_models]
+    for model in removed_models:
+        db.delete(model)
+
     result: list[UserModel] = []
-    for dm in discovered:
+    added_names: list[str] = []
+    for dm in discovered_by_pid.values():
         existing = existing_by_pid.get(dm.provider_model_id)
         if existing:
             existing.description = dm.description
@@ -212,6 +240,7 @@ async def refresh_models(connection_id: str, current_user: User = Depends(get_cu
             )
             db.add(new_model)
             result.append(new_model)
+            added_names.append(new_model.display_name)
 
     conn.connection_status = "connected"
     conn.last_verified_at = now
@@ -219,4 +248,17 @@ async def refresh_models(connection_id: str, current_user: User = Depends(get_cu
     db.commit()
     for m in result:
         db.refresh(m)
-    return result
+    message_parts = []
+    if added_names:
+        message_parts.append(f"Added {len(added_names)} model{'s' if len(added_names) != 1 else ''}.")
+    if removed_names:
+        message_parts.append(f"Removed {len(removed_names)} unavailable model{'s' if len(removed_names) != 1 else ''}.")
+    if not message_parts:
+        message_parts.append(f"All {len(result)} models were verified and are available.")
+    return ModelDiscoverySummary(
+        models=[UserModelOut.model_validate(model) for model in result],
+        added=added_names,
+        removed=removed_names,
+        verified=len(result),
+        message=" ".join(message_parts),
+    )
