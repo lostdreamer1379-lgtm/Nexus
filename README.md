@@ -40,12 +40,13 @@ it is not a promise of future functionality.
 15. [Knowledge graphs](#knowledge-graphs)
 16. [Memory refinement](#memory-refinement)
 17. [System Visualizer](#system-visualizer)
-18. [Database model](#database-model)
-19. [Local development](#local-development)
-20. [Configuration](#configuration)
-21. [Testing and validation](#testing-and-validation)
-22. [Production deployment](#production-deployment)
-23. [Operational limitations and next improvements](#operational-limitations-and-next-improvements)
+18. [Generated project artifacts](#generated-project-artifacts)
+19. [Database model](#database-model)
+20. [Local development](#local-development)
+21. [Configuration](#configuration)
+22. [Testing and validation](#testing-and-validation)
+23. [Production deployment](#production-deployment)
+24. [Operational limitations and next improvements](#operational-limitations-and-next-improvements)
 
 ---
 
@@ -68,6 +69,9 @@ it is not a promise of future functionality.
   uploads, graphs, and memory operations.
 - Manage the account through Settings: log out, clear local cache, clear
   conversations, clear memories, and permanently delete the account.
+- Generate a new project from model-streamed code with `/zip`, display the
+  generated files as readable Markdown, and download both the generated ZIP
+  and a standalone `README.md`.
 
 ### What Nexus AI cannot do
 
@@ -90,6 +94,12 @@ it is not a promise of future functionality.
   or changed; previously encrypted credentials then require re-entry.
 - It cannot make changing `SECRET_KEY` transparent; doing so invalidates
   existing sessions.
+- It cannot create a project ZIP from the Nexus AI repository. ZIP artifacts
+  contain only files returned by the selected model. If the model does not
+  return usable generated files, no ZIP is created.
+- It cannot generate real image or video binaries with the current text-only
+  adapters. `/photo` and `/video` return an explicit capability message until
+  a compatible media provider is implemented.
 
 ### Provider management
 
@@ -136,6 +146,9 @@ Chat supports:
 - Bounded agent-workflow toggle
 - Approximate context-token display
 - Provider error reporting
+- Response modes for normal chat, generated project ZIPs, images, and video
+- Live generated-file output for project requests
+- Persistent artifact links that can be reconstructed after navigation
 
 ### Knowledge features
 
@@ -188,32 +201,76 @@ Destructive server-side actions require confirmation in the interface.
 ## Architecture overview
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ Browser                                                             │
-│                                                                     │
-│ React + Vite                                                       │
-│ ┌──────────┐ ┌──────────────┐ ┌─────────────┐ ┌─────────────────┐ │
-│ │ Sidebar  │ │ Chat UI      │ │ RAG UI      │ │ System          │ │
-│ │ Routing  │ │ SSE client   │ │ Uploads     │ │ Visualizer      │ │
-│ └────┬─────┘ └──────┬───────┘ └──────┬──────┘ └────────┬────────┘ │
-│      │              │                │                 │          │
-│      └──────────────┴────────────────┴─────────────────┘          │
-│                    REST + Server-Sent Events                       │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │ HTTP / SSE
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ FastAPI backend                                                     │
-│                                                                     │
-│ Auth / Providers / Models / Conversations / Chat / RAG / Settings  │
-│        │                 │                    │                     │
-│        ▼                 ▼                    ▼                     │
-│ SQLAlchemy ORM       Provider adapters       RAG services            │
-│        │                 │                    │                     │
-│        ▼                 ▼                    ▼                     │
-│ SQLite in development     External providers    Local files +       │
-│ PostgreSQL in production  OpenAI-compatible     embeddings           │
-└─────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│                              NEXUS AI WORKSPACE                             │
+├────────────────────────────── Browser / React ─────────────────────────────┤
+│                                                                            │
+│  Chat + Composer       Provider Manager       Model Library                │
+│  • SSE streaming       • encrypted-key UX     • discovery/verification     │
+│  • response modes      • provider tests       • enable/disable/grouping    │
+│  • artifact downloads  • model registration   • capability-aware choices   │
+│                                                                            │
+│  Knowledge Bases       Memories + Settings    System Visualizer             │
+│  • uploads/OCR         • review workflow      • live in-tab telemetry      │
+│  • facts/graphs        • approved context    • glowing active routes      │
+│  • comparisons         • account controls     • artifact stage             │
+└───────────────────────────────┬────────────────────────────────────────────┘
+                                │ REST + Server-Sent Events
+                                ▼
+┌──────────────────────────── FastAPI API ────────────────────────────────────┐
+│                                                                            │
+│ Auth ─ Providers ─ Models ─ Conversations ─ Chat ─ RAG ─ Memories ─ Config │
+│   │        │          │          │          │       │        │              │
+│   │        │          │          │          │       │        │              │
+│   │        └──────────┴──────────┴──────────┴───────┴────────┘              │
+│   │                         orchestration + ownership checks                │
+│   ▼                                                                        │
+│ SQLAlchemy models / transactional persistence                               │
+│   │                    │                         │                          │
+│   ▼                    ▼                         ▼                          │
+│ SQLite (dev)       PostgreSQL (prod)       RAG upload/artifact storage      │
+└───────────────────────┬──────────────────────────┬─────────────────────────┘
+                        │                          │
+                        ▼                          ▼
+             ┌─────────────────────┐    ┌──────────────────────────────────┐
+             │ Provider adapters   │    │ Retrieval and extraction         │
+             │ OpenAI-compatible   │    │ chunk → embed → rank → cite     │
+             │ OpenRouter / NVIDIA │    │ PDF/DOCX/TXT/MD/image + OCR      │
+             │ Gemini / Anthropic  │    │ DuckDuckGo live web retrieval    │
+             │ Custom endpoints    │    │ facts, graph, comparisons       │
+             └──────────┬──────────┘    └──────────────────────────────────┘
+                        │
+                        ▼
+             User-owned external model APIs
+```
+
+### End-to-end request architecture
+
+The same system can be viewed as a data-flow graph:
+
+```mermaid
+flowchart LR
+    U[User prompt] --> C[ChatView + Composer]
+    C --> A[Authenticated REST/SSE API]
+    A --> R[Router and ownership checks]
+    R --> S{Requested sources}
+    S --> M[Approved memories]
+    S --> K[Knowledge-base retrieval]
+    S --> W[Live web retrieval]
+    M --> P[Prompt context]
+    K --> P
+    W --> P
+    P --> X{Response mode}
+    X --> N[Normal provider stream]
+    X --> Z[Generated project stream]
+    X --> I[Media capability response]
+    N --> O[Assistant message]
+    Z --> F[FILE block parser]
+    F --> Q[Generated files + README]
+    Q --> D[Downloadable ZIP and README]
+    O --> D2[Persisted conversation]
+    D --> D2
+    D2 --> V[System Visualizer telemetry]
 ```
 
 The browser is responsible for presentation, local UI state, SSE parsing, and
@@ -502,6 +559,20 @@ For discoverable providers, the adapter returns normalized `DiscoveredModel`
 objects. The backend stores them as `UserModel` rows tied to the user's
 connection. Providers without discovery support use manual model registration.
 
+The Provider Manager can also register a single manually supplied model. Model
+discovery and verification are separate concerns:
+
+1. Connection verification confirms that the credential and endpoint respond.
+2. Discovery lists models exposed by the provider.
+3. Chat capability checks send a small streamed probe to confirm that a model
+   can actually generate text for the current account.
+4. Embedding capability checks send a vector probe for embedding models.
+5. Failed or inaccessible models are excluded from capability-aware selectors.
+
+Capability results are cached briefly in the frontend to keep knowledge-base
+model selection responsive while still allowing a fresh verification after a
+provider or model changes.
+
 ### Streaming normalization
 
 Some OpenAI-compatible services emit deltas; others emit cumulative text or
@@ -515,6 +586,14 @@ TheThe price price
 Provider timeouts distinguish connection/request timeouts from stream read
 timeouts. The current streaming read timeout is intentionally generous for
 slow or cold-started hosted models.
+
+### Model Library organization
+
+The Model Library keeps enabled models ahead of disabled models, supports
+individual toggles and bulk enable/disable operations, and groups models by
+capability or use case. Users can create custom groups and move models into
+them. The selected model remains selected while the list is refreshed or
+reordered.
 
 ---
 
@@ -862,6 +941,29 @@ or overwrite contradictory information.
 
 ---
 
+## Important API surface
+
+The backend exposes versioned routes under `/api/v1`:
+
+| Area | Representative endpoints |
+|---|---|
+| Health | `GET /health` |
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/logout`, `GET /auth/me` |
+| Providers | `GET/POST/PATCH/DELETE /providers`, connection testing, discovery |
+| Models | `GET/POST/PATCH/DELETE /models`, enable/disable, capability checks |
+| Conversations | `GET/POST/PATCH/DELETE /conversations` |
+| Streaming chat | `POST /chat/completions` |
+| Artifacts | `GET /chat/artifacts/{random-name}.zip` or `.md` |
+| Knowledge bases | `/rag/knowledge-bases` and nested documents, facts, graph, compare |
+| Memories | `/memories`, refinement, approval, archive |
+| Settings | `/settings` and account/data deletion operations |
+
+Protected endpoints use the authenticated session cookie. Resource IDs are
+never authorization by themselves; every lookup is scoped to the current
+user.
+
+---
+
 ## System Visualizer
 
 The System Visualizer is available at `/visualizer` from the sidebar.
@@ -893,6 +995,88 @@ The visualizer subscribes to this event bus and renders:
 Telemetry is currently per browser tab. It is not a server-wide observability
 system and does not show activity from other users or other browser tabs unless
 they emit through the same tab's event bus.
+
+---
+
+## Generated project artifacts
+
+The chat composer has a **Download ZIP** response mode for creating a new
+project from the selected model's streamed output. This is intentionally
+different from exporting or archiving the Nexus AI source tree.
+
+### Generation flow
+
+```text
+User selects Download ZIP
+        ↓
+ChatView sends a /zip request
+        ↓
+Backend selects the user's enabled model and provider connection
+        ↓
+Model streams generated source blocks
+        ↓
+FILE parser extracts safe relative paths and complete contents
+        ↓
+Backend creates a ZIP only from those generated files
+        ↓
+Backend creates a formatted README.md
+        ↓
+SSE emits artifact links
+        ↓
+Chat persists links so downloads survive navigation/reload
+```
+
+The preferred model protocol is:
+
+```text
+FILE: relative/path/to/file.ext
+complete file contents, preserving line breaks and indentation
+END FILE
+```
+
+The parser also attempts to recover common malformed output, including
+collapsed `FILE: path content END FILE` blocks and fenced Markdown files. A
+successful response must still contain at least one valid generated file.
+
+### Safety rules
+
+Generated artifact packaging:
+
+- Never reads the repository root.
+- Never calls the old repository-archive implementation.
+- Rejects absolute paths and `..` traversal.
+- Rejects `.env` files, Git metadata, Python caches, and `node_modules`.
+- Runs ZIP creation in a worker thread so the SSE event loop stays responsive.
+- Stores artifacts under a temporary artifact directory using random names.
+- Requires the authenticated user for artifact downloads.
+
+The ZIP contains a generated `README.md` in addition to the model-returned
+files. The chat also exposes that README as an independent Markdown download.
+The displayed response uses a separate Markdown section and syntax-highlighted
+fences for each generated file, making the result readable and copyable.
+
+### Artifact events
+
+Artifact-enabled streams can emit:
+
+| Event | Meaning |
+|---|---|
+| `artifact_status` | Generation or ZIP packaging progress |
+| `delta` | Generated code or final formatted file output |
+| `artifact` (`kind=zip`) | Generated ZIP is ready |
+| `artifact` (`kind=readme`) | Standalone README is ready |
+| `error` | Generation, parsing, or provider failure |
+| `done` | Assistant persistence completed |
+
+If the model returns only prose or unusable output, Nexus reports an explicit
+failure and does not create a repository ZIP or a misleading download link.
+
+### Current media boundary
+
+`/photo` and `/video` are recognized response modes, but the currently
+implemented provider adapters are text-streaming adapters. Until a
+media-capable adapter is added, these modes return a clear explanation and do
+not fabricate binary files.
 
 ---
 
