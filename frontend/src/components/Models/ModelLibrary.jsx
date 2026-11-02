@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Boxes, Search, Plus } from "lucide-react";
+import { Boxes, Search, Plus, CheckCheck } from "lucide-react";
 import { api } from "../../api/client";
 import ModelCard from "./ModelCard.jsx";
 import RegisterModelModal from "./RegisterModelModal.jsx";
@@ -19,6 +19,8 @@ export default function ModelLibrary() {
   const [filter, setFilter] = useState("all");
   const [connectionFilter, setConnectionFilter] = useState("all");
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [actionError, setActionError] = useState(null);
+  const [enablingAll, setEnablingAll] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -48,8 +50,28 @@ export default function ModelLibrary() {
   });
 
   const toggleEnabled = async (model) => {
+    setActionError(null);
     const updated = await api.patch(`/api/v1/models/${model.id}`, { enabled: !model.enabled });
     setModels((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+  };
+
+  const enableAll = async () => {
+    const disabledModels = models.filter((model) => !model.enabled);
+    if (disabledModels.length === 0) return;
+    setActionError(null);
+    setEnablingAll(true);
+    try {
+      const updated = await Promise.all(
+        disabledModels.map((model) => api.patch(`/api/v1/models/${model.id}`, { enabled: true }))
+      );
+      const updatedById = Object.fromEntries(updated.map((model) => [model.id, model]));
+      setModels((prev) => prev.map((model) => updatedById[model.id] || model));
+    } catch (err) {
+      setActionError(err?.message || "Some models could not be enabled.");
+      await load();
+    } finally {
+      setEnablingAll(false);
+    }
   };
 
   const removeModel = async (model) => {
@@ -81,6 +103,7 @@ export default function ModelLibrary() {
         .model-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); }
         .model-search input { padding-left: 34px; }
         .model-grid { display: flex; flex-direction: column; gap: var(--space-3); }
+        .model-actions { display: flex; gap: var(--space-2); align-items: center; }
       `}</style>
       <div className="page-inner">
         <div className="page-header">
@@ -88,9 +111,14 @@ export default function ModelLibrary() {
             <h1>Model Library</h1>
             <p>Enable the models you want available in chat. Disabling one doesn&apos;t remove its provider connection.</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowRegisterModal(true)} disabled={connections.length === 0}>
-            <Plus size={16} /> Register model
-          </button>
+          <div className="model-actions">
+            <button className="btn" onClick={enableAll} disabled={enablingAll || !models.some((model) => !model.enabled)}>
+              <CheckCheck size={16} /> {enablingAll ? "Enabling…" : "Enable all"}
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowRegisterModal(true)} disabled={connections.length === 0}>
+              <Plus size={16} /> Register model
+            </button>
+          </div>
         </div>
 
         <div className="model-search">
@@ -116,6 +144,8 @@ export default function ModelLibrary() {
           )}
         </div>
 
+        {actionError && <p className="error-text">{actionError}</p>}
+
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "var(--space-6)" }}>
             <div className="spinner" />
@@ -134,7 +164,7 @@ export default function ModelLibrary() {
           </div>
         ) : (
           <div className="model-grid">
-            {filtered.map((m) => (
+            {[...filtered].sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.display_name.localeCompare(b.display_name)).map((m) => (
               <ModelCard
                 key={m.id}
                 model={m}

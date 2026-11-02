@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X, Info } from "lucide-react";
 import { api, ApiError } from "../../api/client";
 
-const COMMON_EMBEDDING_MODELS = [
+export const COMMON_EMBEDDING_MODELS = [
   { id: "text-embedding-3-small", label: "OpenAI text-embedding-3-small (recommended)", providers: ["openai"] },
   { id: "text-embedding-3-large", label: "OpenAI text-embedding-3-large", providers: ["openai"] },
   { id: "text-embedding-ada-002", label: "OpenAI text-embedding-ada-002 (legacy)", providers: ["openai"] },

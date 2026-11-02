@@ -4,6 +4,7 @@ import { api, ApiError, uploadDocument } from "../../api/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { emitSystemEvent } from "../../utils/systemEvents.js";
+import { COMMON_EMBEDDING_MODELS } from "./CreateKBModal.jsx";
 
 const STATUS_META = {
   pending:    { icon: Clock,       color: "var(--text-tertiary)", label: "Queued" },
@@ -52,6 +53,13 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
   const [uploadError, setUploadError] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [models, setModels] = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [embeddingConnectionId, setEmbeddingConnectionId] = useState(kb.embedding_connection_id || "");
+  const [embeddingModelChoice, setEmbeddingModelChoice] = useState(kb.embedding_model_id);
+  const [customEmbeddingModel, setCustomEmbeddingModel] = useState("");
+  const [savingEmbedding, setSavingEmbedding] = useState(false);
+  const [embeddingError, setEmbeddingError] = useState(null);
+  const embeddingInitializedRef = useRef(false);
   const [compareA, setCompareA] = useState("");
   const [compareB, setCompareB] = useState("");
   const [compareModel, setCompareModel] = useState("");
@@ -91,6 +99,50 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
       setCompareModel((current) => current || list[0]?.id || "");
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    api.get("/api/v1/providers/connections").then((list) => {
+      const connected = list.filter((connection) => connection.connection_status === "connected");
+      setConnections(connected);
+      setEmbeddingConnectionId((current) => current || kb.embedding_connection_id || connected[0]?.id || "");
+    }).catch(() => {});
+  }, [kb.embedding_connection_id]);
+
+  const selectedEmbeddingConnection = connections.find((connection) => connection.id === embeddingConnectionId);
+  const embeddingModels = COMMON_EMBEDDING_MODELS.filter((model) =>
+    model.providers.includes(selectedEmbeddingConnection?.provider_type)
+  );
+  const effectiveEmbeddingModel = embeddingModelChoice === "custom" ? customEmbeddingModel.trim() : embeddingModelChoice;
+
+  useEffect(() => {
+    if (embeddingInitializedRef.current || !selectedEmbeddingConnection) return;
+    const isKnownModel = embeddingModels.some((model) => model.id === kb.embedding_model_id);
+    setEmbeddingModelChoice(isKnownModel ? kb.embedding_model_id : "custom");
+    if (!isKnownModel) setCustomEmbeddingModel(kb.embedding_model_id);
+    embeddingInitializedRef.current = true;
+  }, [embeddingModels, kb.embedding_model_id, selectedEmbeddingConnection]);
+
+  const saveEmbeddingSettings = async () => {
+    if (!effectiveEmbeddingModel || !embeddingConnectionId) {
+      setEmbeddingError("Choose an embedding connection and model.");
+      return;
+    }
+    setEmbeddingError(null);
+    setSavingEmbedding(true);
+    try {
+      const updated = await api.patch(`/api/v1/rag/knowledge-bases/${kb.id}`, {
+        embedding_connection_id: embeddingConnectionId,
+        embedding_model_id: effectiveEmbeddingModel,
+      });
+      onUpdated(updated);
+      setEmbeddingModelChoice(updated.embedding_model_id);
+      setCustomEmbeddingModel("");
+    } catch (err) {
+      setEmbeddingError(err instanceof ApiError ? err.message : "Could not update embedding settings.");
+    } finally {
+      setSavingEmbedding(false);
+    }
+  };
 
   const loadComparisonHistory = useCallback(async () => {
     try {
@@ -273,6 +325,8 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
         .graph-node { display: inline-block; margin: 3px 4px 3px 0; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; }
         .graph-edge { padding: 6px 0; border-top: 1px solid var(--border-subtle); font-size: 12.5px; color: var(--text-secondary); }
         .graph-edge b { color: var(--accent); margin: 0 5px; }
+        .embedding-editor { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+        .embedding-editor-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         @media (max-width: 480px) { .kb-settings-grid { grid-template-columns: 1fr; } }
       `}</style>
 
@@ -285,6 +339,49 @@ export default function KBDetailPanel({ kb, onUpdated, onDelete }) {
         <p style={{ fontSize: 12, color: "var(--text-tertiary)", margin: "0 0 12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
           Embedding configuration
         </p>
+        <div className="embedding-editor">
+          <div className="kb-settings-grid">
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Embedding provider connection</label>
+              <select className="input" value={embeddingConnectionId} onChange={(e) => {
+                setEmbeddingConnectionId(e.target.value);
+                setEmbeddingModelChoice("");
+                setCustomEmbeddingModel("");
+              }}>
+                <option value="">Select a connection</option>
+                {connections.map((connection) => (
+                  <option key={connection.id} value={connection.id}>{connection.connection_name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Embedding model</label>
+              <select className="input" value={embeddingModelChoice} onChange={(e) => {
+                setEmbeddingModelChoice(e.target.value);
+                if (e.target.value !== "custom") setCustomEmbeddingModel("");
+              }}>
+                {embeddingModels.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}
+                <option value="custom">Enter a custom model ID</option>
+              </select>
+              {embeddingModelChoice === "custom" && (
+                <input
+                  className="input"
+                  style={{ marginTop: 8 }}
+                  placeholder="Enter an embedding model ID"
+                  value={customEmbeddingModel}
+                  onChange={(e) => setCustomEmbeddingModel(e.target.value)}
+                />
+              )}
+            </div>
+          </div>
+          <div className="embedding-editor-actions">
+            <button className="btn btn-primary" onClick={saveEmbeddingSettings} disabled={savingEmbedding || !effectiveEmbeddingModel || !embeddingConnectionId}>
+              {savingEmbedding ? "Saving…" : "Save embedding settings"}
+            </button>
+            {embeddingError && <span className="error-text">{embeddingError}</span>}
+          </div>
+          {documents.length > 0 && <span className="field-hint">Changing the embedding model may require reprocessing existing documents.</span>}
+        </div>
         <div className="kb-settings-grid">
           <div className="kb-setting">
             <span className="kb-setting-label">Model</span>
