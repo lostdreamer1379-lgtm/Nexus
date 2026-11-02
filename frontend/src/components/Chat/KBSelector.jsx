@@ -1,22 +1,56 @@
 import { useEffect, useRef, useState } from "react";
-import { Database, ChevronDown, Check, X } from "lucide-react";
+import { Database, ChevronDown, Check } from "lucide-react";
 import { createPortal } from "react-dom";
 
 export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [menuStyle, setMenuStyle] = useState({});
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
   const selected = knowledgeBases.find((k) => k.id === selectedKbId);
 
   useEffect(() => {
     const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target) &&
+        menuRef.current &&
+        !menuRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const positionMenu = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const mobile = window.innerWidth <= 860;
+    setMenuStyle(mobile
+      ? {
+          position: "fixed",
+          top: `${Math.min(rect.bottom + 8, window.innerHeight - 320)}px`,
+          left: "12px",
+          right: "12px",
+          width: "auto",
+        }
+      : {
+          position: "fixed",
+          top: `${rect.bottom + 6}px`,
+          left: `${rect.left}px`,
+          width: "260px",
+        });
+  };
+
+  const toggleMenu = () => {
+    if (!open) positionMenu();
+    setOpen((value) => !value);
+  };
+
   return (
-    <div className="kb-selector" ref={ref}>
+    <div className="kb-selector">
       <style>{`
         .kb-selector { position: relative; }
         .kb-trigger {
@@ -60,7 +94,8 @@ export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
       <button
         className={`kb-trigger ${selected ? "active" : ""}`}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleMenu}
+        ref={triggerRef}
         title={selected ? `Knowledge base: ${selected.name}` : "Add knowledge base context"}
       >
         <Database size={14} />
@@ -69,7 +104,7 @@ export default function KBSelector({ knowledgeBases, selectedKbId, onSelect }) {
       </button>
 
       {open && createPortal(
-        <div className="kb-menu">
+        <div className="kb-menu" ref={menuRef} style={menuStyle}>
           {/* "None" option to deactivate RAG */}
           <div
             className="kb-item"

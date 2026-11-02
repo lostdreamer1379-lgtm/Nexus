@@ -1,4 +1,5 @@
 import json
+import math
 import pathlib
 import shutil
 import uuid
@@ -136,26 +137,41 @@ async def refine_facts(
     if not documents:
         raise HTTPException(status_code=400, detail="The knowledge base has no ready documents")
     from app.rag.extraction import extract_text
-    corpus = "\n\n".join(f"DOCUMENT: {doc.filename}\n{extract_text(doc.file_path)[:16000]}" for doc in documents)
+    try:
+        corpus = "\n\n".join(
+            f"DOCUMENT: {doc.filename}\n{extract_text(doc.file_path)[:16000]}"
+            for doc in documents
+        )
+    except (ImportError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not extract text from a knowledge-base document: {exc}",
+        ) from exc
     prompt = (
         'Extract explicit, verifiable facts. Return ONLY JSON: '
         '{"facts":[{"subject":"...","predicate":"...","object":"...","evidence":"short quote","confidence":0.0}]}. '
         "Do not infer. Keep max 100 facts.\n\n" + corpus
     )
-    adapter = build_adapter(model.connection)
+    try:
+        adapter = build_adapter(model.connection)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=exc.message) from exc
     parts = []
-    async for chunk in adapter.stream_chat(model.provider_model_id, [ChatMessage(role="user", content=prompt)]):
-        if chunk.error:
-            raise HTTPException(status_code=502, detail=chunk.error)
-        if chunk.delta:
-            parts.append(chunk.delta)
-        if chunk.done:
-            break
+    try:
+        async for chunk in adapter.stream_chat(model.provider_model_id, [ChatMessage(role="user", content=prompt)]):
+            if chunk.error:
+                raise HTTPException(status_code=502, detail=chunk.error)
+            if chunk.delta:
+                parts.append(chunk.delta)
+            if chunk.done:
+                break
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=exc.message) from exc
     try:
         text = "".join(parts)
         start, end = text.find("{"), text.rfind("}")
         data = json.loads(text[start : end + 1]) if start >= 0 and end > start else {}
-        extracted = data.get("facts", [])[:100]
+        extracted = data.get("facts", [])[:100] if isinstance(data, dict) else []
     except (TypeError, ValueError, json.JSONDecodeError):
         extracted = []
     if not extracted:
@@ -171,13 +187,19 @@ async def refine_facts(
         for old in same:
             if old.object.lower() != object_value.lower():
                 old.status = "conflict"
+        try:
+            confidence = float(item.get("confidence", 0.5))
+        except (TypeError, ValueError):
+            confidence = 0.5
+        if not math.isfinite(confidence):
+            confidence = 0.5
         row = KBFact(
             kb_id=kb_id,
             subject=subject,
             predicate=predicate,
             object=object_value,
             evidence=str(item.get("evidence", "")).strip() or None,
-            confidence=min(max(float(item.get("confidence", 0.5)), 0.0), 1.0),
+            confidence=min(max(confidence, 0.0), 1.0),
             source_document_id=documents[0].id,
         )
         db.add(row)
