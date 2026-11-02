@@ -17,9 +17,13 @@ the client sends beyond "which of MY rows is this".
 import json
 import logging
 import re
+import tempfile
+import uuid
+import zipfile
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
@@ -28,7 +32,7 @@ from app.models import Conversation, Message, User, UserMemory, UserModel
 from app.providers.base import ChatMessage, ProviderError
 from app.providers.registry import build_adapter
 from app.rag.retrieval import retrieve as rag_retrieve
-from app.rag.web import WebResult, search_web
+from app.rag.web import WebResult, WebSearchError, search_web
 from app.schemas import ChatCompletionRequest
 
 logger = logging.getLogger(__name__)
@@ -44,6 +48,15 @@ the evidence when it is relevant, distinguish facts from estimates, and do
 not invent details that the sources do not support. Prefer the most recent
 source when dates conflict. Include the source URL for important claims.
 """
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+ARTIFACT_ROOT = Path(tempfile.gettempdir()) / "nexus-ai-artifacts"
+ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+ARTIFACT_COMMANDS = {
+    "zip": re.compile(r"^\s*/zip(?:\s+|$)", re.IGNORECASE),
+    "photo": re.compile(r"^\s*/photo(?:\s+|$)", re.IGNORECASE),
+    "video": re.compile(r"^\s*/video(?:\s+|$)", re.IGNORECASE),
+}
 
 RESPONSE_FORMAT_SYSTEM_PROMPT = """\
 You are Nexus AI. Return a complete, polished answer that preserves every
@@ -75,6 +88,56 @@ FINAL_RESPONSE_FORMAT_INSTRUCTIONS = (
 
 def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
+
+
+def _artifact_command(message: str) -> tuple[str | None, str]:
+    for kind, pattern in ARTIFACT_COMMANDS.items():
+        if pattern.search(message):
+            return kind, pattern.sub("", message, count=1).strip()
+    lowered = message.lower()
+    if (
+        "give me this whole project in a zip" in lowered
+        or "download the project as a zip" in lowered
+        or ("whole project" in lowered and "zip" in lowered)
+    ):
+        return "zip", message
+    if re.search(r"\b(generate|create|make|produce)\b.*\b(image|photo|picture)\b", lowered):
+        return "photo", message
+    if re.search(r"\b(generate|create|make|produce)\b.*\b(video|clip|animation)\b", lowered):
+        return "video", message
+    return None, message
+
+
+def _create_project_zip() -> tuple[str, str]:
+    token = uuid.uuid4().hex
+    archive = ARTIFACT_ROOT / f"{token}.zip"
+    excluded = {".git", "node_modules", "dist", "__pycache__", ".pytest_cache", "uploads"}
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
+        for path in PROJECT_ROOT.rglob("*"):
+            relative = path.relative_to(PROJECT_ROOT)
+            if (
+                not path.is_file()
+                or any(part in excluded for part in relative.parts)
+                or path.name == ".env"
+                or path.name.startswith(".env.")
+                or path.suffix in {".db", ".sqlite", ".sqlite3"}
+            ):
+                continue
+            output.write(path, relative)
+    return token, archive.name
+
+
+@router.get("/artifacts/{artifact_name}")
+def download_artifact(
+    artifact_name: str,
+    current_user: User = Depends(get_current_user),
+):
+    if not re.fullmatch(r"[a-f0-9]{32}\.zip", artifact_name):
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    path = ARTIFACT_ROOT / artifact_name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Artifact expired or not found")
+    return FileResponse(path, media_type="application/zip", filename="nexus-ai-project.zip")
 
 
 async def _collect_provider_response(adapter, model_id: str, messages: list[ChatMessage]) -> str:
@@ -109,6 +172,7 @@ async def chat_completions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    artifact_kind, _ = _artifact_command(payload.message)
     # --- Resolve the model and verify ownership + enabled status ---
     model = db.get(UserModel, payload.model_id)
     if not model or model.user_id != current_user.id:
@@ -149,6 +213,35 @@ async def chat_completions(
         ChatMessage(role="system", content=RESPONSE_FORMAT_SYSTEM_PROMPT),
         *[ChatMessage(role=m.role, content=m.content) for m in trimmed if m.role in ("user", "assistant")],
     ]
+    if artifact_kind == "photo":
+        chat_messages.insert(0, ChatMessage(
+            role="system",
+            content=(
+                "The user requested /photo. Treat this as a media-generation request. "
+                "This deployment currently has text-only provider adapters, so do not claim "
+                "that an image file was generated. Provide a precise image-generation prompt "
+                "and clearly explain that an image-capable provider must be configured."
+            ),
+        ))
+    elif artifact_kind == "video":
+        chat_messages.insert(0, ChatMessage(
+            role="system",
+            content=(
+                "The user requested /video. Treat this as a media-generation request. "
+                "This deployment currently has text-only provider adapters, so do not claim "
+                "that a video file was generated. Provide a concise production prompt, shot "
+                "list, and clearly explain that a video-capable provider must be configured."
+            ),
+        ))
+    elif artifact_kind == "zip":
+        chat_messages.insert(0, ChatMessage(
+            role="system",
+            content=(
+                "The user requested a downloadable project archive. A real ZIP artifact will "
+                "be attached separately; briefly describe what it contains and do not fabricate "
+                "a link."
+            ),
+        ))
 
     approved_memories = (
         db.query(UserMemory)
@@ -193,6 +286,7 @@ async def chat_completions(
             logger.warning("RAG retrieval failed for kb_id=%s: %s", payload.kb_id, exc)
 
     web_results: list[WebResult] = []
+    web_error: str | None = None
     if payload.web_search:
         try:
             web_results = await search_web(payload.message, limit=5)
@@ -206,7 +300,13 @@ async def chat_completions(
                     )
                 )
                 chat_messages = [ChatMessage(role="system", content=web_context)] + chat_messages
+            else:
+                web_error = "Live web search returned no usable sources."
+        except WebSearchError as exc:
+            web_error = str(exc)
+            logger.warning("Web retrieval failed for query: %s", exc)
         except Exception as exc:  # noqa: BLE001
+            web_error = "Live web search failed before the model request."
             logger.warning("Web retrieval failed for query: %s", exc)
 
     try:
@@ -245,9 +345,29 @@ async def chat_completions(
             start_payload["web_sources"] = [
                 {"title": item.title, "url": item.url} for item in web_results
             ]
+        if web_error:
+            start_payload["web_error"] = web_error
         yield _sse(start_payload)
 
         try:
+            if artifact_kind == "zip":
+                _, artifact_name = _create_project_zip()
+                yield _sse({
+                    "type": "artifact",
+                    "kind": "zip",
+                    "name": "nexus-ai-project.zip",
+                    "download_url": f"/api/v1/chat/artifacts/{artifact_name}",
+                })
+            elif artifact_kind in {"photo", "video"}:
+                yield _sse({
+                    "type": "artifact",
+                    "kind": artifact_kind,
+                    "status": "unavailable",
+                    "detail": (
+                        f"/{artifact_kind} was recognized, but no {artifact_kind}-capable provider "
+                        "is configured in this deployment."
+                    ),
+                })
             if payload.agent_workflow:
                 yield _sse({"type": "workflow", "status": "planning", "step": 0})
                 plan_messages = [

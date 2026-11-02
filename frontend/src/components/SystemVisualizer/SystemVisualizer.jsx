@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, BrainCircuit, CheckCircle2, Database, Globe2, MessageSquare,
+  Activity, Archive, BrainCircuit, CheckCircle2, Database, Globe2, MessageSquare,
   Network, Radio, Server, Sparkles, Upload, Workflow, XCircle,
 } from "lucide-react";
 import { clearSystemEvents, subscribeSystemEvents } from "../../utils/systemEvents.js";
@@ -12,13 +12,14 @@ const NODES = [
   { id: "knowledge", label: "Knowledge", icon: Database, x: 47, y: 18, color: "#22c55e" },
   { id: "web", label: "Live web", icon: Globe2, x: 47, y: 82, color: "#f59e0b" },
   { id: "model", label: "Model", icon: Sparkles, x: 70, y: 50, color: "#a78bfa" },
+  { id: "artifact", label: "Artifact", icon: Archive, x: 79, y: 22, color: "#f97316" },
   { id: "output", label: "Response", icon: CheckCircle2, x: 88, y: 50, color: "#14b8a6" },
 ];
 
 const LINKS = [
   ["input", "router"], ["router", "memory"], ["router", "knowledge"],
   ["router", "web"], ["router", "model"], ["memory", "model"], ["knowledge", "model"],
-  ["web", "model"], ["model", "output"],
+  ["web", "model"], ["model", "artifact"], ["artifact", "output"], ["model", "output"],
 ];
 
 const ICONS = { chat: MessageSquare, upload: Upload, retrieval: Database, web: Globe2, model: Sparkles, memory: BrainCircuit, graph: Network, system: Activity };
@@ -91,7 +92,9 @@ export default function SystemVisualizer() {
     const nodes = new Set(sequence.filter((event) => event.node).map((event) => event.node));
     if (nodes.has("input") && nodes.has("router")) links.add("input-router");
     if (nodes.has("router") && nodes.has("model")) links.add("router-model");
-    if (nodes.has("model") && nodes.has("output")) links.add("model-output");
+    if (nodes.has("model") && nodes.has("artifact")) links.add("model-artifact");
+    if (nodes.has("artifact") && nodes.has("output")) links.add("artifact-output");
+    if (nodes.has("model") && nodes.has("output") && !nodes.has("artifact")) links.add("model-output");
     ["memory", "knowledge", "web"].forEach((source) => {
       if (nodes.has(source)) {
         links.add(`router-${source}`);

@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 import { emitSystemEvent } from "../utils/systemEvents.js";
 
 export class ApiError extends Error {
@@ -140,5 +140,3 @@ export async function uploadDocument(kbId, file, onProgress) {
     xhr.send(formData);
   });
 }
-
-export { API_BASE_URL };

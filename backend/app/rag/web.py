@@ -17,6 +17,10 @@ class WebResult:
     content: str
 
 
+class WebSearchError(RuntimeError):
+    """Raised when all configured live-search sources fail."""
+
+
 class _TextParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -61,7 +65,7 @@ class _SearchParser(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = dict(attrs)
         classes = set((attrs_dict.get("class") or "").split())
-        if tag == "a" and classes.intersection({"result__a", "result__url"}):
+        if tag == "a" and classes.intersection({"result__a", "result__url", "result-link"}):
             self._in_result = True
             self._title = ""
             self._href = attrs_dict.get("href") or ""
@@ -82,29 +86,44 @@ class _SearchParser(HTMLParser):
 
 async def search_web(query: str, limit: int = 5) -> list[WebResult]:
     headers = {"User-Agent": "NexusAI/1.0 (+web-rag)"}
-    search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+    search_urls = (
+        f"https://html.duckduckgo.com/html/?q={quote_plus(query)}",
+        f"https://lite.duckduckgo.com/lite/?q={quote_plus(query)}",
+    )
+    last_error: Exception | None = None
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True, headers=headers) as client:
-        response = await client.get(search_url)
-        response.raise_for_status()
-        candidates = []
-        seen_urls: set[str] = set()
-        for title, url in _search_urls(response.text):
-            url = urljoin("https://html.duckduckgo.com", url)
-            if url not in seen_urls:
-                seen_urls.add(url)
-                candidates.append((title, url))
-            if len(candidates) >= limit:
-                break
-        results: list[WebResult] = []
-        for title, url in candidates:
+        for search_url in search_urls:
             try:
-                page = await client.get(url)
-                page.raise_for_status()
-                content = _page_text(page.text)[:6000]
-                if content:
-                    results.append(WebResult(title=title, url=url, content=content))
-            except (httpx.HTTPError, ValueError):
-                continue
-            if len(results) >= limit:
-                break
-    return results
+                response = await client.get(search_url)
+                response.raise_for_status()
+                candidates = []
+                seen_urls: set[str] = set()
+                for title, url in _search_urls(response.text):
+                    url = urljoin(search_url, url)
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        candidates.append((title, url))
+                    if len(candidates) >= limit:
+                        break
+                if not candidates:
+                    last_error = ValueError("Live search returned no usable results")
+                    continue
+
+                results: list[WebResult] = []
+                for title, url in candidates:
+                    try:
+                        page = await client.get(url)
+                        page.raise_for_status()
+                        content = _page_text(page.text)[:6000]
+                        if content:
+                            results.append(WebResult(title=title, url=url, content=content))
+                    except (httpx.HTTPError, ValueError):
+                        continue
+                    if len(results) >= limit:
+                        break
+                if results:
+                    return results
+                last_error = ValueError("Live search pages contained no readable text")
+            except (httpx.HTTPError, ValueError) as exc:
+                last_error = exc
+    raise WebSearchError("Live web search is unavailable right now") from last_error

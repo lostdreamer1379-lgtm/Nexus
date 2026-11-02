@@ -7,8 +7,10 @@ export default function Composer({
   streaming,
   disabled,
   webSearch,
+  allSources,
   agentWorkflow,
   onToggleWeb,
+  onToggleAllSources,
   onToggleAgent,
 }) {
   const [text, setText] = useState("");
@@ -127,8 +129,8 @@ export default function Composer({
             {text.trim() && !optionsOpen ? <Plus size={18} /> : optionsOpen ? <X size={15} /> : (
               <>
                 <span className="composer-options-label">
-                  {webSearch || agentWorkflow
-                    ? [webSearch && "Web", agentWorkflow && "Agent"].filter(Boolean).join(" · ")
+                  {webSearch || allSources || agentWorkflow
+                    ? [allSources && "All sources", !allSources && webSearch && "Web", agentWorkflow && "Agent"].filter(Boolean).join(" · ")
                     : "Options"}
                 </span>
                 <ChevronDown size={14} />
@@ -137,7 +139,10 @@ export default function Composer({
           </button>
           {optionsOpen && (
             <div className="composer-options">
-              <button type="button" className={`composer-option ${webSearch ? "active" : ""}`} onClick={onToggleWeb} aria-pressed={webSearch}>
+              <button type="button" className={`composer-option ${allSources ? "active" : ""}`} onClick={onToggleAllSources} aria-pressed={allSources} title="Use memory, the selected knowledge base, and live web search together">
+                All sources
+              </button>
+              <button type="button" className={`composer-option ${webSearch && !allSources ? "active" : ""}`} onClick={onToggleWeb} aria-pressed={webSearch && !allSources}>
                 Web
               </button>
               <button type="button" className={`composer-option ${agentWorkflow ? "active" : ""}`} onClick={onToggleAgent} aria-pressed={agentWorkflow}>

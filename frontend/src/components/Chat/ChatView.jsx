@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Sparkles } from "lucide-react";
-import { api, streamChatCompletion, ApiError } from "../../api/client";
+import { api, streamChatCompletion, ApiError, API_BASE_URL } from "../../api/client";
 import ModelSelector from "./ModelSelector.jsx";
 import KBSelector from "./KBSelector.jsx";
 import Composer from "./Composer.jsx";
@@ -16,6 +16,7 @@ import {
 const MessageList = lazy(() => import("./MessageList.jsx"));
 
 const CHAT_PREFERENCES_KEY = "nexus-chat-preferences";
+const LIVE_WEB_CUES = /\b(latest|recent|current|today|tonight|breaking|news|live|real[\s-]?time|search the web|look online|on the internet|according to the web)\b/i;
 
 function readChatPreferences() {
   try {
@@ -23,10 +24,11 @@ function readChatPreferences() {
     return {
       modelId: typeof saved.modelId === "string" ? saved.modelId : null,
       webSearch: Boolean(saved.webSearch),
+      allSources: Boolean(saved.allSources),
       agentWorkflow: Boolean(saved.agentWorkflow),
     };
   } catch {
-    return { modelId: null, webSearch: false, agentWorkflow: false };
+    return { modelId: null, webSearch: false, allSources: false, agentWorkflow: false };
   }
 }
 
@@ -40,6 +42,7 @@ export default function ChatView({ onConversationChange }) {
   const [knowledgeBases, setKnowledgeBases] = useState([]);
   const [selectedKbId, setSelectedKbId] = useState(null);
   const [webSearch, setWebSearch] = useState(initialPreferences.current.webSearch);
+  const [allSources, setAllSources] = useState(initialPreferences.current.allSources);
   const [agentWorkflow, setAgentWorkflow] = useState(initialPreferences.current.agentWorkflow);
   const [workflowStatus, setWorkflowStatus] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -58,18 +61,19 @@ export default function ChatView({ onConversationChange }) {
   const remainingTokens = contextLength ? Math.max(0, contextLength - usedTokens) : null;
 
   const toggleWebSearch = () => setWebSearch((value) => !value);
+  const toggleAllSources = () => setAllSources((value) => !value);
   const toggleAgentWorkflow = () => setAgentWorkflow((value) => !value);
 
   useEffect(() => {
     try {
       localStorage.setItem(
         CHAT_PREFERENCES_KEY,
-        JSON.stringify({ modelId: selectedModelId, webSearch, agentWorkflow })
+        JSON.stringify({ modelId: selectedModelId, webSearch, allSources, agentWorkflow })
       );
     } catch {
       // Preferences are optional; chat behavior must continue if storage is unavailable.
     }
-  }, [selectedModelId, webSearch, agentWorkflow]);
+  }, [selectedModelId, webSearch, allSources, agentWorkflow]);
 
   useEffect(() => {
     activeConversationIdRef.current = conversationId;
@@ -142,6 +146,8 @@ export default function ChatView({ onConversationChange }) {
 
   const sendMessage = async (text) => {
     if (!selectedModelId) return;
+    const automaticWebSearch = LIVE_WEB_CUES.test(text);
+    const effectiveWebSearch = webSearch || allSources || automaticWebSearch;
     setStreamError(null);
     const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const emitTelemetry = (event) => emitSystemEvent({ ...event, runId });
@@ -161,6 +167,7 @@ export default function ChatView({ onConversationChange }) {
       created_at: new Date().toISOString(),
       rag_chunks: [],
       web_sources: [],
+      artifact: null,
     };
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setStreaming(true);
@@ -182,7 +189,7 @@ export default function ChatView({ onConversationChange }) {
           modelId: selectedModelId,
           message: text,
           kbId: selectedKbId,
-          webSearch,
+          webSearch: effectiveWebSearch,
           agentWorkflow,
         },
         (event) => {
@@ -190,6 +197,10 @@ export default function ChatView({ onConversationChange }) {
             emitTelemetry({ kind: "system", node: "router", title: "Request routed", detail: event.model_display_name || "Selecting model", status: "running" });
             if (event.rag_chunks?.length) emitTelemetry({ kind: "retrieval", node: "knowledge", title: "Knowledge retrieved", detail: `${event.rag_chunks.length} relevant chunks`, status: "complete" });
             if (event.web_sources?.length) emitTelemetry({ kind: "web", node: "web", title: "Web sources found", detail: `${event.web_sources.length} live sources`, status: "complete" });
+            if (event.web_error) {
+              emitTelemetry({ kind: "web", node: "web", title: "Web search unavailable", detail: event.web_error, status: "error" });
+              setStreamError(`Web search: ${event.web_error}`);
+            }
             if (event.memory_used) emitTelemetry({ kind: "memory", node: "memory", title: "Memory context loaded", detail: "Approved memories added to the model context", status: "complete" });
             resolvedConversationId = event.conversation_id;
             activeConversationIdRef.current = event.conversation_id;
@@ -220,6 +231,26 @@ export default function ChatView({ onConversationChange }) {
               });
             }
             if (!conversationId) onConversationChange?.();
+          } else if (event.type === "artifact") {
+            const artifact = event.download_url
+              ? { ...event, download_url: `${API_BASE_URL}${event.download_url}` }
+              : event;
+            const available = Boolean(event.download_url);
+            emitTelemetry({
+              kind: "artifact",
+              node: "artifact",
+              title: available ? "Artifact ready" : "Artifact request recognized",
+              detail: event.name || event.detail || event.kind,
+              status: available ? "complete" : "error",
+            });
+            if (available) {
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "assistant") next[next.length - 1] = { ...last, artifact };
+                return next;
+              });
+            }
           } else if (event.type === "workflow") {
             setWorkflowStatus(event);
             emitTelemetry({ kind: "model", node: event.status === "planning" ? "router" : "model", title: `Workflow ${event.status}`, detail: event.label || "Agent processing", status: event.status === "complete" ? "complete" : "running" });
@@ -472,8 +503,10 @@ export default function ChatView({ onConversationChange }) {
         streaming={streaming}
         disabled={!selectedModelId}
         webSearch={webSearch}
+        allSources={allSources}
         agentWorkflow={agentWorkflow}
         onToggleWeb={toggleWebSearch}
+        onToggleAllSources={toggleAllSources}
         onToggleAgent={toggleAgentWorkflow}
       />
     </div>

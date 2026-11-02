@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, RotateCcw, AlertTriangle, BookOpen, ChevronDown, ChevronUp, BrainCircuit } from "lucide-react";
+import { Copy, Check, RotateCcw, AlertTriangle, BookOpen, ChevronDown, ChevronUp, BrainCircuit, Download } from "lucide-react";
 
 function copyableResponse(text) {
   const lines = text.split("\n");
@@ -237,6 +237,11 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
           line-height: 1.5; display: -webkit-box;
           -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
         }
+        .artifact-download {
+          display: inline-flex; align-items: center; gap: 7px; margin-top: 8px;
+          padding: 8px 11px; border: 1px solid var(--accent); border-radius: var(--radius-sm);
+          color: var(--accent); text-decoration: none; font-size: 12px; background: var(--accent-dim);
+        }
         @media (max-width: 600px) {
           .msg-list { padding: var(--space-4) var(--space-3); }
           .msg-row.user .msg-bubble { max-width: 92%; }
@@ -280,6 +285,11 @@ export default function MessageList({ messages, streaming, onRegenerate, onSaveM
           )}
           {m.role === "assistant" && m.web_sources?.length > 0 && (
             <WebSources sources={m.web_sources} />
+          )}
+          {m.role === "assistant" && m.artifact?.download_url && (
+            <a className="artifact-download" href={m.artifact.download_url} download={m.artifact.name || "download"}>
+              <Download size={14} /> Download {m.artifact.name || "artifact"}
+            </a>
           )}
           {m.content && !streaming && (
             <div className="msg-actions">
